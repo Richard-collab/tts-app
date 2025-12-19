@@ -4,7 +4,6 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -90,31 +89,6 @@ function mergeBuffers(audioContext, audioBuffers, resolve) {
   const wavBlob = bufferToWave(mergedBuffer, mergedBuffer.length);
   resolve(wavBlob);
 }
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#6C5CE7',
-      light: '#A29BFE',
-      dark: '#5649C0',
-    },
-    secondary: {
-      main: '#00CEC9',
-    },
-    error: {
-      main: '#E84393',
-    },
-    success: {
-      main: '#00B894',
-    },
-    warning: {
-      main: '#FDCB6E',
-    },
-  },
-  typography: {
-    fontFamily: "'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-  },
-});
 
 // Voice options
 const voiceOptions = [
@@ -779,7 +753,6 @@ function TtsEditor() {
   // }, [setAudioGroups, setMessage]);
 
   return (
-    <ThemeProvider theme={theme}>
       <Container maxWidth="xl" sx={{ py: 3 }}>
           {/* <Grid container spacing={3} justifyContent="center"> */}
             <Box
@@ -1236,7 +1209,6 @@ function TtsEditor() {
             </DialogActions>
           </Dialog>
       </Container>
-    </ThemeProvider>
   );
 }
 
