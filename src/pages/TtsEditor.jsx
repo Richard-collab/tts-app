@@ -10,6 +10,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
+import DescriptionIcon from '@mui/icons-material/Description';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -599,6 +600,29 @@ function TtsEditor() {
     }
   };
 
+  // Export Excel
+  const handleExportExcel = () => {
+    if (audioGroups.length === 0) return;
+
+    try {
+      const data = audioGroups.map(group => ({
+        '语料名称': group.index,
+        '语料内容': group.segments.map(seg => seg.text).join('')
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+      saveAs(blob, "语料导出.xlsx");
+      setMessage({ text: 'Excel文件导出成功！', type: 'success' });
+    } catch (error) {
+      setMessage({ text: `导出Excel失败: ${error.message}`, type: 'error' });
+    }
+  };
+
   // Update segment callback
   const handleUpdateSegment = useCallback((groupIndex, segmentIndex, newData) => {
     setAudioGroups(prev => {
@@ -1030,6 +1054,21 @@ function TtsEditor() {
                     }}
                   >
                     {isDownloading ? '打包中...' : '打包导出所有音频'}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    size="large"
+                    startIcon={<DescriptionIcon />}
+                    onClick={handleExportExcel}
+                    disabled={audioGroups.length === 0 || isGenerating}
+                    sx={{
+                      borderRadius: '40px',
+                      px: 4,
+                      boxShadow: '0 8px 20px rgba(0, 206, 201, 0.3)'
+                    }}
+                  >
+                    导出Excel文件
                   </Button>
                   {/* <Button
                     variant="outlined"
