@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/tts-editor.html"
+      "destination": "/tts-editor.html" 
     },
     {
       "source": "/(.*)",
