@@ -2,13 +2,11 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/tts-editor.html" 
-      /* 将根路径流量指向你的特定 HTML 文件 */
+      "destination": "/tts-editor.html"
     },
     {
       "source": "/(.*)",
       "destination": "/tts-editor.html"
-      /* 可选：如果是单页应用 (SPA)，这一行确保刷新页面不报 404 */
     }
   ]
 }
