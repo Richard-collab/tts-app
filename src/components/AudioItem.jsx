@@ -142,7 +142,13 @@ function AudioItem({
                 size="small"
                 value={pauseDuration}
                 onChange={(e) => setPauseDuration(e.target.value)}
-                inputProps={{ step: 0.1, min: 0, max: 10, style: { width: 60, textAlign: 'center' } }}
+                inputProps={{
+                  step: 0.1,
+                  min: 0,
+                  max: 10,
+                  style: { width: 60, textAlign: 'center' },
+                  'aria-label': '停顿秒数'
+                }}
                 sx={{ width: 80 }}
               />
               <Button
@@ -216,6 +222,9 @@ function AudioItem({
             InputProps={{
               disableUnderline: true,
               sx: { fontSize: '0.9rem' }
+            }}
+            inputProps={{
+              'aria-label': `音频片段 ${segmentIndex + 1} 文本内容`
             }}
           />
         </Box>
