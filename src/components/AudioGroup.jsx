@@ -8,6 +8,7 @@ import PauseIcon from '@mui/icons-material/Pause';
 import DownloadIcon from '@mui/icons-material/Download';
 import AudioFileIcon from '@mui/icons-material/AudioFile';
 import AudioItem from './AudioItem';
+import ConfirmationDialog from './ConfirmationDialog';
 
 function AudioGroup({
   group,
@@ -24,9 +25,22 @@ function AudioGroup({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [currentPlayingIndex, setCurrentPlayingIndex] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, segmentIndex: null });
   const playControlRef = useRef({ audio: null, stop: false });
 
   const hasValidSegments = group.segments.some(seg => !seg.error);
+
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm.type === 'group') {
+      onDeleteGroup(groupIndex);
+    } else if (deleteConfirm.type === 'segment' && deleteConfirm.segmentIndex !== null) {
+      onDeleteSegment(groupIndex, deleteConfirm.segmentIndex);
+    }
+  };
+
+  const handleCloseDeleteConfirm = () => {
+    setDeleteConfirm({ ...deleteConfirm, open: false });
+  };
 
   // Helper function to play a single segment URL
   function playSegmentUrl(url) {
@@ -184,11 +198,7 @@ function AudioGroup({
             variant="contained"
             color="error"
             startIcon={<DeleteIcon />}
-            onClick={() => {
-              if (window.confirm(`确定要删除语料"${group.index}"的所有音频片段吗？`)) {
-                onDeleteGroup(groupIndex);
-              }
-            }}
+            onClick={() => setDeleteConfirm({ open: true, type: 'group', segmentIndex: null })}
           >
             删除音频组
           </Button>
@@ -223,16 +233,24 @@ function AudioGroup({
           groupIndex={groupIndex}
           voice={voice}
           isCurrentlyPlaying={currentPlayingIndex === segmentIndex}
-          onDelete={() => {
-            if (window.confirm('确定要删除这个音频片段吗？')) {
-              onDeleteSegment(groupIndex, segmentIndex);
-            }
-          }}
+          onDelete={() => setDeleteConfirm({ open: true, type: 'segment', segmentIndex })}
           onUpdate={(newData) => onUpdateSegment(groupIndex, segmentIndex, newData)}
           onRegenerate={(newText) => onRegenerateSegment(groupIndex, segmentIndex, newText)}
           setMessage={setMessage}
         />
       ))}
+
+      <ConfirmationDialog
+        open={deleteConfirm.open}
+        title={deleteConfirm.type === 'group' ? '删除音频组' : '删除音频片段'}
+        content={deleteConfirm.type === 'group'
+          ? `确定要删除语料"${group.index}"的所有音频片段吗？`
+          : '确定要删除这个音频片段吗？'}
+        onConfirm={handleDeleteConfirm}
+        onClose={handleCloseDeleteConfirm}
+        confirmLabel="删除"
+        confirmColor="error"
+      />
     </Paper>
   );
 }
