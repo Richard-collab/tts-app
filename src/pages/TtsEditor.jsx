@@ -328,29 +328,16 @@ function TtsEditor() {
           const corpusData = res?.data?.scriptUnitContents || res?.scriptUnitContents;
 
           if (corpusData && Array.isArray(corpusData)) {
-              // Aggregate by content text
-              const aggregated = {};
-              corpusData.forEach(item => {
-                  const text = item.content; // assuming 'content' is the text field
-                  if (!text) return;
-
-                  if (!aggregated[text]) {
-                      aggregated[text] = {
-                          text: text,
-                          baizeIds: [], // Store all IDs that have this text
-                          originalData: []
-                      };
-                  }
-                  aggregated[text].baizeIds.push(item.id); // Assuming 'id' is the contentId
-                  aggregated[text].originalData.push(item);
-              });
-
-              // Prepare data for selection dialog
-              const preparedData = Object.keys(aggregated).map((text, idx) => ({
-                  index: aggregated[text].originalData[0].contentName || `导入语料-${idx+1}`,
-                  text: text,
-                  baizeData: aggregated[text],
-                  uniqueId: idx
+              // No aggregation
+              const preparedData = corpusData.map((item, idx) => ({
+                  index: item.contentName || `导入语料-${idx+1}`,
+                  text: item.content,
+                  baizeData: {
+                      id: item.id,
+                      text: item.content,
+                      originalData: item
+                  },
+                  uniqueId: item.id || idx // Use ID if available, else index
               }));
 
               setCorpusList(preparedData);
@@ -487,37 +474,34 @@ function TtsEditor() {
             // Normalize for comparison (trim, maybe ignore spaces?)
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
-            // Iterate all original IDs for this aggregated group
-            // Use serial uploads as requested to avoid overwhelming the server or client
-            for (const contentId of group.baizeData.baizeIds) {
-                try {
-                    // Upload Audio
-                    // We upload the SAME merged audio to ALL original IDs.
-                    const filename = `${group.index}_${contentId}.wav`;
-                    const res = await uploadAudio(token, contentId, mergedBlob, filename);
+            // Upload to the single ID for this group
+            const contentId = group.baizeData.id;
+            try {
+                // Upload Audio
+                const filename = `${group.index}_${contentId}.wav`;
+                const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
-                    // Check for locked message in response
-                    if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
-                        lockedErrorOccurred = true;
-                        failCount++;
-                    } else if (res && res.code === "2000") {
-                         // Update Text if changed
-                        if (isTextChanged) {
-                            await updateScriptText(token, contentId, currentFullText);
-                        }
-                        successCount++;
-                    } else {
-                        // Unexpected code
-                        throw new Error(res.msg || "上传失败");
-                    }
-                } catch (e) {
-                    console.error(`Failed to upload for contentId ${contentId}`, e);
-                    // Check for locked message in error object if available
-                    if (e.message && e.message.includes('锁定')) {
-                        lockedErrorOccurred = true;
-                    }
+                // Check for locked message in response
+                if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+                    lockedErrorOccurred = true;
                     failCount++;
+                } else if (res && res.code === "2000") {
+                        // Update Text if changed
+                    if (isTextChanged) {
+                        await updateScriptText(token, contentId, currentFullText);
+                    }
+                    successCount++;
+                } else {
+                    // Unexpected code
+                    throw new Error(res.msg || "上传失败");
                 }
+            } catch (e) {
+                console.error(`Failed to upload for contentId ${contentId}`, e);
+                // Check for locked message in error object if available
+                if (e.message && e.message.includes('锁定')) {
+                    lockedErrorOccurred = true;
+                }
+                failCount++;
             }
         }
 
