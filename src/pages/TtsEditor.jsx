@@ -991,6 +991,9 @@ function TtsEditor() {
                         placeholder={`请输入文本，一行一个文本，每个文本可按句号、问号分割成片段...\n例如：\n这是第一行文本。\n这是第二行文本。`}
                         value={textInput}
                         onChange={(e) => setTextInput(e.target.value)}
+                        inputProps={{
+                          'aria-label': '待合成文本输入'
+                        }}
                       />
                     </Box>
                   )}

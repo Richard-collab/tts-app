@@ -809,7 +809,7 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">音频波形编辑器</Typography>
-        <IconButton onClick={onClose}>
+        <IconButton onClick={onClose} aria-label="关闭波形编辑器">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
