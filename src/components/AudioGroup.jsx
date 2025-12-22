@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  Box, Paper, Typography, Button, IconButton, Tooltip
+  Box, Paper, Typography, Button, IconButton, Tooltip, Checkbox
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -13,6 +13,8 @@ function AudioGroup({
   group,
   groupIndex,
   voice,
+  checked,
+  onToggle,
   onDeleteGroup,
   onDeleteSegment,
   onUpdateSegment,
@@ -173,6 +175,11 @@ function AudioGroup({
         gap: 1
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Checkbox
+            checked={!!checked}
+            onChange={(e) => onToggle(e.target.checked)}
+            color="primary"
+          />
           <AudioFileIcon color="primary" />
           <Typography variant="subtitle1" fontWeight={600} color="primary">
             语料名称：{group.index}
