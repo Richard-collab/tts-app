@@ -1,12 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  Box, Paper, Typography, Button, IconButton, Tooltip, Checkbox
+  Box, Paper, Typography, Button, IconButton, Tooltip, Checkbox, CircularProgress
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import DownloadIcon from '@mui/icons-material/Download';
 import AudioFileIcon from '@mui/icons-material/AudioFile';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AudioItem from './AudioItem';
 
 function AudioGroup({
@@ -19,12 +21,14 @@ function AudioGroup({
   onDeleteSegment,
   onUpdateSegment,
   onRegenerateSegment,
+  onUploadGroup,
   mergeAudioSegments,
   mergedAudiosRef,
   setMessage
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [currentPlayingIndex, setCurrentPlayingIndex] = useState(null);
   const playControlRef = useRef({ audio: null, stop: false });
 
@@ -128,6 +132,25 @@ function AudioGroup({
     }
   }, [group, groupIndex, mergeAudioSegments, mergedAudiosRef, setMessage]);
 
+  // Upload Group
+  const handleUpload = async () => {
+    if (!hasValidSegments) {
+        setMessage({ text: '没有可上传的音频片段', type: 'error' });
+        return;
+    }
+    if (!onUploadGroup) return;
+
+    setIsUploading(true);
+    try {
+        await onUploadGroup(groupIndex);
+    } catch (error) {
+        // Error handling should be done in parent mostly, but we catch here just in case
+        console.error(error);
+    } finally {
+        setIsUploading(false);
+    }
+  };
+
   // Cleanup effect
   useEffect(() => {
     return () => {
@@ -186,10 +209,22 @@ function AudioGroup({
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          {group.baizeData && (
+              <Button
+                  size="small"
+                  variant={group.isUploaded ? "outlined" : "contained"}
+                  color="success"
+                  startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
+                  onClick={handleUpload}
+                  disabled={isUploading || !hasValidSegments}
+              >
+                  {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : '上传音频')}
+              </Button>
+          )}
           <Button
             size="small"
             variant="contained"
-            color="error"
+            color="warning"
             startIcon={<DeleteIcon />}
             onClick={() => {
               if (window.confirm(`确定要删除语料"${group.index}"的所有音频片段吗？`)) {
