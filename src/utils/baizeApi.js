@@ -83,11 +83,7 @@ export async function fetchScriptCorpus(token, scriptId) {
 // Upload Audio
 export async function uploadAudio(token, contentId, wavBlob, filename) {
     const targetUrl = `${BASE_URL}/AiSpeech/scriptCorpus/importSingle?contentId=${contentId}`;
-    const proxyUrl = `/api/proxy/get?url=${encodeURIComponent(targetUrl)}`; // User snippet used proxy/get for POST? Wait.
-    // Snippet:
-    // const response = await fetch(`/api/proxy/get?url=${encodeURIComponent(http_url)}`, {
-    //    method: 'POST', ...
-    // Yes, snippet used /api/proxy/get even for POST. I will follow snippet blindly.
+    const proxyUrl = `/api/proxy/post?url=${encodeURIComponent(targetUrl)}`;
 
     console.log(`Uploading audio to: ${proxyUrl} for contentId: ${contentId}`);
 

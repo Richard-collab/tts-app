@@ -431,6 +431,7 @@ function TtsEditor() {
     try {
         for (const group of audioGroups) {
             if (!group.baizeData) continue; // Skip non-baize groups
+            if (group.checked === false) continue; // Skip unchecked groups (default is true if undefined)
 
             // Generate/Get merged audio for this group
             let mergedBlob = null;
@@ -768,7 +769,8 @@ function TtsEditor() {
           index: item.index,
           text: item.text,
           segments: [],
-          baizeData: item.baizeData // Preserve Baize metadata if present
+          baizeData: item.baizeData, // Preserve Baize metadata if present
+          checked: true // Default to checked
         };
 
         for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
@@ -899,6 +901,17 @@ function TtsEditor() {
       setMessage({ text: `导出Excel失败: ${error.message}`, type: 'error' });
     }
   };
+
+  // Toggle group check
+  const handleToggleGroup = useCallback((groupIndex, isChecked) => {
+    setAudioGroups(prev => {
+      const updated = [...prev];
+      if (updated[groupIndex]) {
+        updated[groupIndex] = { ...updated[groupIndex], checked: isChecked };
+      }
+      return updated;
+    });
+  }, []);
 
   // Update segment callback
   const handleUpdateSegment = useCallback((groupIndex, segmentIndex, newData) => {
@@ -1470,6 +1483,8 @@ function TtsEditor() {
                       group={group}
                       groupIndex={groupIndex}
                       voice={voice}
+                      checked={group.checked}
+                      onToggle={(val) => handleToggleGroup(groupIndex, val)}
                       onDeleteGroup={handleDeleteGroup}
                       onDeleteSegment={handleDeleteSegment}
                       onUpdateSegment={handleUpdateSegment}
