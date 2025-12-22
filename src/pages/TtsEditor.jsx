@@ -215,6 +215,7 @@ function TtsEditor() {
   const [pasteContent, setPasteContent] = useState('');
   const fileInputRef = useRef(null);
   const excelDataRef = useRef(null);
+  const baizeDataRef = useRef(null);
 
   // Baize API State
   const [user, setUser] = useState(null);
@@ -310,9 +311,10 @@ function TtsEditor() {
 
       try {
           const res = await fetchScriptCorpus(token, script.id);
-          if (res && res.scriptUnitContents) {
-              const corpusList = res.scriptUnitContents;
+          // Handle response structure: { code: "2000", data: { scriptUnitContents: [] } }
+          const corpusList = res?.data?.scriptUnitContents || res?.scriptUnitContents;
 
+          if (corpusList && Array.isArray(corpusList)) {
               // Aggregate by content text
               const aggregated = {};
               corpusList.forEach(item => {
@@ -330,17 +332,16 @@ function TtsEditor() {
                   aggregated[text].originalData.push(item);
               });
 
-              // Convert to audioGroups format
-              const newGroups = Object.keys(aggregated).map((text, idx) => ({
-                  index: aggregated[text].originalData[0].contentName || `导入语料-${idx+1}`, // Use first item's name or fallback
+              // Prepare data for synthesis (do not set audioGroups yet)
+              const preparedData = Object.keys(aggregated).map((text, idx) => ({
+                  index: aggregated[text].originalData[0].contentName || `导入语料-${idx+1}`,
                   text: text,
-                  segments: [],
-                  baizeData: aggregated[text] // Store metadata for upload
+                  baizeData: aggregated[text]
               }));
 
-              setAudioGroups(newGroups);
-              mergedAudiosRef.current = {};
-              setMessage({ text: `成功导入 ${newGroups.length} 条聚合语料`, type: 'success' });
+              baizeDataRef.current = preparedData;
+              setFileName(`已加载话术: ${script.scriptName} (${preparedData.length}条)`);
+              setMessage({ text: `话术已加载，请点击"开始逐个合成音频"`, type: 'success' });
           } else {
               throw new Error("话术语料为空或格式不正确");
           }
@@ -652,7 +653,7 @@ function TtsEditor() {
     }
 
     let data = [];
-    if (tabValue === 1) { // Text tab
+    if (tabValue === 2) { // Text tab
       const text = textInput.trim();
       if (!text) {
         setMessage({ text: '请输入文本', type: 'error' });
@@ -664,12 +665,18 @@ function TtsEditor() {
         return;
       }
       data = lines.map((line, index) => ({ index: index + 1, text: line }));
-    } else { // Excel tab
+    } else if (tabValue === 1) { // Excel tab
       if (!excelDataRef.current) {
         setMessage({ text: '请选择Excel文件', type: 'error' });
         return;
       }
       data = excelDataRef.current;
+    } else if (tabValue === 0) { // Baize tab
+      if (!baizeDataRef.current) {
+        setMessage({ text: '请先导入话术', type: 'error' });
+        return;
+      }
+      data = baizeDataRef.current;
     }
 
     if (data.length === 0) {
@@ -702,7 +709,8 @@ function TtsEditor() {
         const audioGroup = {
           index: item.index,
           text: item.text,
-          segments: []
+          segments: [],
+          baizeData: item.baizeData // Preserve Baize metadata if present
         };
 
         for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
