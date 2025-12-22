@@ -3,7 +3,7 @@ import {
   Container, Paper, Typography, Box, Grid, FormControl, InputLabel, Select, MenuItem,
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
-  List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon
+  List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -15,6 +15,7 @@ import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import ScienceIcon from '@mui/icons-material/Science';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -1157,6 +1158,67 @@ function TtsEditor() {
     }
   }, [voice, speed, volume, pitch, generateSingleAudio, handleUpdateSegment]);
 
+  // Generate test audio for testing
+  const handleAddTestData = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const sampleRate = 8000;
+      const segmentDefs = [
+        { type: 'tone', freq: 440, duration: 2 },
+        { type: 'sweep', from: 220, to: 880, duration: 2 }
+      ];
+
+      const segments = segmentDefs.map(def => {
+        const duration = def.duration || 1;
+        const numSamples = Math.floor(sampleRate * duration);
+        const buffer = audioContext.createBuffer(1, numSamples, sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < numSamples; i++) {
+          const t = i / sampleRate;
+          let sample = 0;
+          if (def.type === 'tone') {
+            sample = 0.6 * Math.sin(2 * Math.PI * def.freq * t);
+          } else if (def.type === 'sweep') {
+            const freq = def.from + (def.to - def.from) * (t / duration);
+            sample = 0.6 * Math.sin(2 * Math.PI * freq * t);
+          }
+          data[i] = Math.max(-1, Math.min(1, sample));
+        }
+
+        const wavBlob = bufferToWave(buffer, buffer.length);
+        const url = URL.createObjectURL(wavBlob);
+        return {
+          text: `测试片段 ${def.type} (${def.duration}s)`,
+          blob: wavBlob,
+          url,
+          played: false
+        };
+      });
+
+      const newGroup = {
+        index: `测试语料-${Date.now()}`,
+        text: '测试用语料（自动生成）',
+        segments,
+        baizeData: {
+            id: `test-id-${Date.now()}`,
+            text: '测试用语料（自动生成）',
+            originalData: { isPlay: false }
+        },
+        isUploaded: false
+      };
+
+      setAudioGroups(prev => [newGroup, ...prev]);
+      // Set baizeDataRef to fake valid state for progress bar
+      if (!baizeDataRef.current) {
+          baizeDataRef.current = [{ id: 'test', text: 'test' }];
+      }
+      setMessage({ text: '已添加测试数据', type: 'success' });
+    } catch (error) {
+      setMessage({ text: `生成测试数据失败: ${error.message}`, type: 'error' });
+    }
+  }, [setAudioGroups, setMessage]);
+
   return (
       <Container maxWidth="xl" sx={{ py: 3 }}>
           {/* <Grid container spacing={3} justifyContent="center"> */}
@@ -1587,6 +1649,27 @@ function TtsEditor() {
                 </Box>
               </Paper>
             {/* </Grid> */}
+
+             {/* Test Data FAB */}
+             <Fab
+                color="primary"
+                aria-label="add test data"
+                onClick={handleAddTestData}
+                sx={{
+                    position: 'fixed',
+                    bottom: 120,
+                    right: 40,
+                    zIndex: 1000,
+                    boxShadow: '0 8px 16px rgba(108, 92, 231, 0.4)',
+                    background: 'linear-gradient(45deg, #6C5CE7, #a29bfe)',
+                    '&:hover': {
+                        transform: 'scale(1.1)',
+                        boxShadow: '0 12px 20px rgba(108, 92, 231, 0.5)'
+                    }
+                }}
+             >
+                <ScienceIcon />
+             </Fab>
 
              {/* Floating Progress Bar */}
              {audioGroups.length > 0 && baizeDataRef.current && (
