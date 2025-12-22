@@ -3,7 +3,7 @@ import {
   Container, Paper, Typography, Box, Grid, FormControl, InputLabel, Select, MenuItem,
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
-  List, ListItem, ListItemText, ListItemButton, Divider
+  List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -225,8 +225,16 @@ function TtsEditor() {
   const [loginPassword, setLoginPassword] = useState('');
   const [scriptDialogOpen, setScriptDialogOpen] = useState(false);
   const [scriptList, setScriptList] = useState([]);
+  const [scriptSearch, setScriptSearch] = useState('');
   const [isFetchingScripts, setIsFetchingScripts] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Corpus Dialog State
+  const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
+  const [corpusList, setCorpusList] = useState([]);
+  const [corpusSearch, setCorpusSearch] = useState('');
+  const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
+  const [tempScript, setTempScript] = useState(null);
   
   // Progress state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -289,6 +297,7 @@ function TtsEditor() {
           handleLoginOpen();
           return;
       }
+      setScriptSearch('');
       setScriptDialogOpen(true);
       setIsFetchingScripts(true);
       try {
@@ -307,17 +316,17 @@ function TtsEditor() {
 
   const handleScriptSelect = async (script) => {
       setScriptDialogOpen(false);
-      setMessage({ text: `正在导入话术: ${script.scriptName}...`, type: '' });
+      setMessage({ text: `正在获取话术语料: ${script.scriptName}...`, type: '' });
 
       try {
           const res = await fetchScriptCorpus(token, script.id);
           // Handle response structure: { code: "2000", data: { scriptUnitContents: [] } }
-          const corpusList = res?.data?.scriptUnitContents || res?.scriptUnitContents;
+          const corpusData = res?.data?.scriptUnitContents || res?.scriptUnitContents;
 
-          if (corpusList && Array.isArray(corpusList)) {
+          if (corpusData && Array.isArray(corpusData)) {
               // Aggregate by content text
               const aggregated = {};
-              corpusList.forEach(item => {
+              corpusData.forEach(item => {
                   const text = item.content; // assuming 'content' is the text field
                   if (!text) return;
 
@@ -332,22 +341,63 @@ function TtsEditor() {
                   aggregated[text].originalData.push(item);
               });
 
-              // Prepare data for synthesis (do not set audioGroups yet)
+              // Prepare data for selection dialog
               const preparedData = Object.keys(aggregated).map((text, idx) => ({
                   index: aggregated[text].originalData[0].contentName || `导入语料-${idx+1}`,
                   text: text,
-                  baizeData: aggregated[text]
+                  baizeData: aggregated[text],
+                  uniqueId: idx
               }));
 
-              baizeDataRef.current = preparedData;
-              setFileName(`已加载话术: ${script.scriptName} (${preparedData.length}条)`);
-              setMessage({ text: `话术已加载，请点击"开始逐个合成音频"`, type: 'success' });
+              setCorpusList(preparedData);
+              setTempScript(script);
+              setCorpusSearch('');
+              // Select all by default
+              setSelectedCorpusIndices(new Set(preparedData.map(item => item.uniqueId)));
+              setCorpusDialogOpen(true);
+              setMessage({ text: '', type: '' });
           } else {
               throw new Error("话术语料为空或格式不正确");
           }
       } catch (error) {
-          setMessage({ text: `导入话术失败: ${error.message}`, type: 'error' });
+          setMessage({ text: `获取话术语料失败: ${error.message}`, type: 'error' });
       }
+  };
+
+  const handleCorpusToggle = (id) => {
+      const newSelected = new Set(selectedCorpusIndices);
+      if (newSelected.has(id)) {
+          newSelected.delete(id);
+      } else {
+          newSelected.add(id);
+      }
+      setSelectedCorpusIndices(newSelected);
+  };
+
+  const handleCorpusSelectAll = (filtered) => {
+      const filteredIds = filtered.map(item => item.uniqueId);
+      const allSelected = filteredIds.every(id => selectedCorpusIndices.has(id));
+
+      const newSelected = new Set(selectedCorpusIndices);
+      if (allSelected) {
+          filteredIds.forEach(id => newSelected.delete(id));
+      } else {
+          filteredIds.forEach(id => newSelected.add(id));
+      }
+      setSelectedCorpusIndices(newSelected);
+  };
+
+  const handleCorpusConfirm = () => {
+      const selectedItems = corpusList.filter(item => selectedCorpusIndices.has(item.uniqueId));
+      if (selectedItems.length === 0) {
+          alert("请至少选择一条语料");
+          return;
+      }
+
+      baizeDataRef.current = selectedItems;
+      setFileName(`已加载话术: ${tempScript.scriptName} (${selectedItems.length}条)`);
+      setCorpusDialogOpen(false);
+      setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
   };
 
   // Baize Upload Handler
@@ -1555,14 +1605,26 @@ function TtsEditor() {
           <Dialog open={scriptDialogOpen} onClose={() => setScriptDialogOpen(false)} maxWidth="sm" fullWidth>
             <DialogTitle>选择话术导入</DialogTitle>
             <DialogContent>
+                <Box sx={{ mb: 2, mt: 1 }}>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="搜索话术名称"
+                        value={scriptSearch}
+                        onChange={(e) => setScriptSearch(e.target.value)}
+                        placeholder="输入关键词筛选..."
+                    />
+                </Box>
                 {isFetchingScripts ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                         <CircularProgress />
                     </Box>
                 ) : (
-                    <List sx={{ pt: 0 }}>
-                        {scriptList.length > 0 ? (
-                            scriptList.map((script) => (
+                    <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto' }}>
+                        {scriptList.filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase())).length > 0 ? (
+                            scriptList
+                                .filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase()))
+                                .map((script) => (
                                 <Box key={script.id}>
                                     <ListItem disablePadding>
                                         <ListItemButton onClick={() => handleScriptSelect(script)}>
@@ -1577,7 +1639,7 @@ function TtsEditor() {
                             ))
                         ) : (
                             <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                                没有找到可用的话术
+                                没有找到匹配的话术
                             </Typography>
                         )}
                     </List>
@@ -1585,6 +1647,85 @@ function TtsEditor() {
             </DialogContent>
             <DialogActions>
                 <Button onClick={() => setScriptDialogOpen(false)}>取消</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Corpus Selection Dialog */}
+          <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="md" fullWidth>
+            <DialogTitle>选择要导入的语料</DialogTitle>
+            <DialogContent>
+                <Box sx={{ mb: 2, mt: 1 }}>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="搜索语料内容"
+                        value={corpusSearch}
+                        onChange={(e) => setCorpusSearch(e.target.value)}
+                        placeholder="输入关键词筛选..."
+                    />
+                </Box>
+                {(() => {
+                    const filteredCorpus = corpusList.filter(item =>
+                        item.text.toLowerCase().includes(corpusSearch.toLowerCase()) ||
+                        item.index.toLowerCase().includes(corpusSearch.toLowerCase())
+                    );
+                    const allSelected = filteredCorpus.length > 0 && filteredCorpus.every(item => selectedCorpusIndices.has(item.uniqueId));
+
+                    return (
+                        <>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, pl: 2 }}>
+                                <Checkbox
+                                    checked={allSelected}
+                                    indeterminate={filteredCorpus.some(item => selectedCorpusIndices.has(item.uniqueId)) && !allSelected}
+                                    onChange={() => handleCorpusSelectAll(filteredCorpus)}
+                                />
+                                <Typography variant="body2" fontWeight="bold">
+                                    全选 ({selectedCorpusIndices.size} / {corpusList.length})
+                                </Typography>
+                            </Box>
+                            <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto' }}>
+                                {filteredCorpus.length > 0 ? (
+                                    filteredCorpus.map((item) => (
+                                        <div key={item.uniqueId}>
+                                            <ListItem disablePadding>
+                                                <ListItemButton onClick={() => handleCorpusToggle(item.uniqueId)} dense>
+                                                    <ListItemIcon>
+                                                        <Checkbox
+                                                            edge="start"
+                                                            checked={selectedCorpusIndices.has(item.uniqueId)}
+                                                            tabIndex={-1}
+                                                            disableRipple
+                                                        />
+                                                    </ListItemIcon>
+                                                    <ListItemText
+                                                        primary={item.text}
+                                                        secondary={item.index}
+                                                        primaryTypographyProps={{
+                                                            style: {
+                                                                whiteSpace: 'nowrap',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis'
+                                                            }
+                                                        }}
+                                                    />
+                                                </ListItemButton>
+                                            </ListItem>
+                                            <Divider />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                                        没有找到匹配的语料
+                                    </Typography>
+                                )}
+                            </List>
+                        </>
+                    );
+                })()}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setCorpusDialogOpen(false)}>取消</Button>
+                <Button onClick={handleCorpusConfirm} variant="contained">确认导入</Button>
             </DialogActions>
           </Dialog>
       </Container>
