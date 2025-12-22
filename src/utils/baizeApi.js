@@ -99,7 +99,9 @@ export async function uploadAudio(token, contentId, wavBlob, filename) {
     });
 
     if (!response.ok) {
-        throw new Error(`Upload audio failed: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        // Pass specific error message if available
+        throw new Error(errorData.msg || errorData.message || `Upload audio failed: ${response.status}`);
     }
     return await response.json();
 }

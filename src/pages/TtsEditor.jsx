@@ -395,6 +395,7 @@ function TtsEditor() {
       }
 
       baizeDataRef.current = selectedItems;
+      setAudioGroups([]); // Clear existing audio groups to prevent mixing with old data
       setFileName(`已加载话术: ${tempScript.scriptName} (${selectedItems.length}条)`);
       setCorpusDialogOpen(false);
       setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
@@ -427,6 +428,7 @@ function TtsEditor() {
 
     let successCount = 0;
     let failCount = 0;
+    let lockedErrorOccurred = false;
 
     try {
         for (const group of audioGroups) {
@@ -482,34 +484,43 @@ function TtsEditor() {
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
             // Iterate all original IDs for this aggregated group
-            // Use Promise.all for parallel uploads to improve performance and user experience
-            const uploadPromises = group.baizeData.baizeIds.map(async (contentId) => {
+            // Use serial uploads as requested to avoid overwhelming the server or client
+            for (const contentId of group.baizeData.baizeIds) {
                 try {
                     // Upload Audio
                     // We upload the SAME merged audio to ALL original IDs.
                     const filename = `${group.index}_${contentId}.wav`;
-                    await uploadAudio(token, contentId, mergedBlob, filename);
+                    const res = await uploadAudio(token, contentId, mergedBlob, filename);
+
+                    // Check for locked message in response
+                    if (res && res.msg && res.msg.includes('被锁定')) {
+                        lockedErrorOccurred = true;
+                    }
 
                     // Update Text if changed
                     if (isTextChanged) {
                         await updateScriptText(token, contentId, currentFullText);
                     }
-                    return { success: true };
+                    successCount++;
                 } catch (e) {
                     console.error(`Failed to upload for contentId ${contentId}`, e);
-                    return { success: false, error: e };
+                    // Check for locked message in error object if available
+                    if (e.message && e.message.includes('被锁定')) {
+                        lockedErrorOccurred = true;
+                    }
+                    failCount++;
                 }
-            });
-
-            const results = await Promise.all(uploadPromises);
-            const groupSuccess = results.filter(r => r.success).length;
-            const groupFail = results.filter(r => !r.success).length;
-
-            successCount += groupSuccess;
-            failCount += groupFail;
+            }
         }
 
-        setMessage({ text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, type: failCount > 0 ? 'warning' : 'success' });
+        if (lockedErrorOccurred) {
+            alert("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
+        }
+
+        setMessage({
+            text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个${lockedErrorOccurred ? ' (包含被锁定项目)' : ''}`,
+            type: failCount > 0 ? 'warning' : 'success'
+        });
 
     } catch (error) {
         setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
