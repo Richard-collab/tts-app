@@ -1286,7 +1286,7 @@ function TtsEditor() {
                       borderColor: 'primary.light'
                     }}>
                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        从白泽系统导入话术语料，合成后可直接上传回系统（自动聚合同名文本）
+                        从白泽系统导入话术语料，合成后可直接上传回系统
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                           <Button
