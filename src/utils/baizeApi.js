@@ -114,6 +114,59 @@ export async function updateScriptText(token, contentId, newText) {
     return Promise.resolve({ success: true, message: "Placeholder: Text updated locally logged" });
 }
 
+// Lock Script
+export async function lockScript(token, scriptId) {
+    const http_url = `${BASE_URL}/AiSpeech/scriptEditor/lockOneScript?scriptId=${scriptId}`;
+    // 发送POST请求
+    const response = await fetch(`/api/proxy/post?url=${encodeURIComponent(http_url)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'token': token
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP错误: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.code === '2000') {
+        return result;
+    } else {
+        throw new Error(result.msg || '话术锁定失败');
+    }
+}
+
+// Unlock Script
+export async function unlockScript(token, scriptId) {
+    const http_url = `${BASE_URL}/AiSpeech/scriptEditor/unLockOneScript?scriptId=${scriptId}`;
+
+    // 发送POST请求
+    const response = await fetch(`/api/proxy/post?url=${encodeURIComponent(http_url)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'token': token
+        },
+        body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP错误: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.code === '2000') {
+        return result;
+    } else {
+        throw new Error(result.msg || '话术解锁失败');
+    }
+}
+
 // Helper: AudioBuffer to WAV (from provided snippet or existing code)
 // We already have bufferToWave in TtsEditor.jsx, we can reuse or duplicate.
 // Since this is a service file, maybe it shouldn't depend on DOM specific things unless necessary.
