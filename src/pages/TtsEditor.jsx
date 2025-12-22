@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Container, Paper, Typography, Box, Grid, FormControl, InputLabel, Select, MenuItem,
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
-  CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -10,10 +11,15 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import DescriptionIcon from '@mui/icons-material/Description';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import LoginIcon from '@mui/icons-material/Login';
+import LogoutIcon from '@mui/icons-material/Logout';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import AudioGroup from '../components/AudioGroup';
+import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript } from '../utils/baizeApi';
 import '../App.css';
 
 // Buffer to WAV (moved outside component)
@@ -209,7 +215,31 @@ function TtsEditor() {
   const [pasteContent, setPasteContent] = useState('');
   const fileInputRef = useRef(null);
   const excelDataRef = useRef(null);
+  const baizeDataRef = useRef(null);
+
+  // Baize API State
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [scriptDialogOpen, setScriptDialogOpen] = useState(false);
+  const [scriptList, setScriptList] = useState([]);
+  const [scriptSearch, setScriptSearch] = useState('');
+  const [isFetchingScripts, setIsFetchingScripts] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Corpus Dialog State
+  const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
+  const [corpusList, setCorpusList] = useState([]);
+  const [corpusSearch, setCorpusSearch] = useState('');
+  const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
+  const [tempScript, setTempScript] = useState(null);
   
+  // Result Dialog State
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [resultDialogMessage, setResultDialogMessage] = useState('');
+
   // Progress state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -220,6 +250,308 @@ function TtsEditor() {
   // Audio data
   const [audioGroups, setAudioGroups] = useState([]);
   const mergedAudiosRef = useRef({});
+
+  // Init user from local storage
+  useEffect(() => {
+    const savedUser = localStorage.getItem('audioEditor_user');
+    const savedToken = localStorage.getItem('audioEditor_token');
+    if (savedUser && savedToken) {
+        setUser(JSON.parse(savedUser));
+        setToken(savedToken);
+    }
+  }, []);
+
+  // Login Handlers
+  const handleLoginOpen = () => setLoginOpen(true);
+  const handleLoginClose = () => setLoginOpen(false);
+  const handleLoginSubmit = async () => {
+    if (!loginUsername || !loginPassword) {
+        setMessage({ text: '请输入用户名和密码', type: 'error' });
+        return;
+    }
+    try {
+        const result = await login(loginUsername, loginPassword);
+        const newUser = { account: result.account || loginUsername };
+        const newToken = result.token;
+
+        setUser(newUser);
+        setToken(newToken);
+
+        localStorage.setItem('audioEditor_user', JSON.stringify(newUser));
+        localStorage.setItem('audioEditor_token', newToken);
+
+        setMessage({ text: `登录成功: ${newUser.account}`, type: 'success' });
+        handleLoginClose();
+    } catch (error) {
+        setMessage({ text: `登录失败: ${error.message}`, type: 'error' });
+    }
+  };
+  const handleLogout = () => {
+      setUser(null);
+      setToken(null);
+      localStorage.removeItem('audioEditor_user');
+      localStorage.removeItem('audioEditor_token');
+      setMessage({ text: '已退出登录', type: 'success' });
+  };
+
+  // Baize Import Handlers
+  const handleOpenScriptDialog = async () => {
+      if (!token) {
+          setMessage({ text: '请先登录', type: 'error' });
+          handleLoginOpen();
+          return;
+      }
+      setScriptSearch('');
+      setScriptDialogOpen(true);
+      setIsFetchingScripts(true);
+      try {
+          const res = await fetchScripts(token);
+          if (res.code === "2000" && Array.isArray(res.data)) {
+            setScriptList(res.data);
+          } else {
+            throw new Error(res.msg || "获取话术列表失败");
+          }
+      } catch (error) {
+          setMessage({ text: `获取话术列表失败: ${error.message}`, type: 'error' });
+      } finally {
+          setIsFetchingScripts(false);
+      }
+  };
+
+  const handleScriptSelect = async (script) => {
+      setScriptDialogOpen(false);
+      setMessage({ text: `正在获取话术语料: ${script.scriptName}...`, type: '' });
+
+      try {
+          const res = await fetchScriptCorpus(token, script.id);
+          // Handle response structure: { code: "2000", data: { scriptUnitContents: [] } }
+          const corpusData = res?.data?.scriptUnitContents || res?.scriptUnitContents;
+
+          if (corpusData && Array.isArray(corpusData)) {
+              // No aggregation
+              const preparedData = corpusData.map((item, idx) => ({
+                  index: item.contentName || `导入语料-${idx+1}`,
+                  text: item.content,
+                  baizeData: {
+                      id: item.id,
+                      text: item.content,
+                      originalData: item
+                  },
+                  uniqueId: item.id || idx // Use ID if available, else index
+              }));
+
+              setCorpusList(preparedData);
+              setTempScript(script);
+              setCorpusSearch('');
+              // Select none by default
+              setSelectedCorpusIndices(new Set());
+              setCorpusDialogOpen(true);
+              setMessage({ text: '', type: '' });
+          } else {
+              throw new Error("话术语料为空或格式不正确");
+          }
+      } catch (error) {
+          setMessage({ text: `获取话术语料失败: ${error.message}`, type: 'error' });
+      }
+  };
+
+  const handleCorpusToggle = (id) => {
+      const newSelected = new Set(selectedCorpusIndices);
+      if (newSelected.has(id)) {
+          newSelected.delete(id);
+      } else {
+          newSelected.add(id);
+      }
+      setSelectedCorpusIndices(newSelected);
+  };
+
+  const handleCorpusSelectAll = (filtered) => {
+      const filteredIds = filtered.map(item => item.uniqueId);
+      const allSelected = filteredIds.every(id => selectedCorpusIndices.has(id));
+
+      const newSelected = new Set(selectedCorpusIndices);
+      if (allSelected) {
+          filteredIds.forEach(id => newSelected.delete(id));
+      } else {
+          filteredIds.forEach(id => newSelected.add(id));
+      }
+      setSelectedCorpusIndices(newSelected);
+  };
+
+  const handleCorpusConfirm = () => {
+      const selectedItems = corpusList.filter(item => selectedCorpusIndices.has(item.uniqueId));
+      if (selectedItems.length === 0) {
+          alert("请至少选择一条语料");
+          return;
+      }
+
+      baizeDataRef.current = selectedItems;
+      setAudioGroups([]); // Clear existing audio groups to prevent mixing with old data
+      setFileName(`已加载话术: ${tempScript.scriptName} (${selectedItems.length}条)`);
+      setCorpusDialogOpen(false);
+      setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
+  };
+
+  // Baize Upload Handler
+  const handleBaizeUpload = async () => {
+    let successCount = 0;
+    let failCount = 0;
+    let lockedErrorOccurred = false;
+
+    if (!token) {
+        setMessage({ text: '请先登录', type: 'error' });
+        return;
+    }
+    if (audioGroups.length === 0) {
+        setMessage({ text: '没有可上传的语料', type: 'error' });
+        return;
+    }
+
+    // Check if we have Baize data (ensure it was imported from Baize)
+    const hasBaizeData = audioGroups.some(g => g.baizeData);
+    if (!hasBaizeData) {
+        setMessage({ text: '当前语料不是从白泽导入的，无法上传', type: 'error' });
+        return;
+    }
+
+    if (!tempScript?.id) {
+        setMessage({ text: '无法获取话术ID，无法执行锁定操作', type: 'error' });
+        return;
+    }
+
+    if (!window.confirm("确定要将生成的音频上传到系统吗？这将覆盖系统中的原有音频。")) {
+        return;
+    }
+
+    setIsUploading(true);
+    setMessage({ text: '正在解锁话术...', type: '' });
+
+    // Unlock Script
+    try {
+        await unlockScript(token, tempScript.id);
+    } catch (error) {
+        setMessage({ text: `解锁话术失败: ${error.message}`, type: 'error' });
+        setIsUploading(false);
+        return;
+    }
+
+    setMessage({ text: '正在上传音频...', type: '' });
+
+    try {
+        for (const group of audioGroups) {
+            if (!group.baizeData) continue; // Skip non-baize groups
+            if (group.checked === false) continue; // Skip unchecked groups (default is true if undefined)
+
+            // Generate/Get merged audio for this group
+            let mergedBlob = null;
+            if (mergedAudiosRef.current[audioGroups.indexOf(group)]) {
+                mergedBlob = mergedAudiosRef.current[audioGroups.indexOf(group)].blob;
+            } else {
+                // Try to merge if valid segments exist
+                const validSegments = group.segments.filter(seg => !seg.error);
+                if (validSegments.length > 0) {
+                    try {
+                        mergedBlob = await mergeAudioSegments(validSegments);
+                    } catch (e) {
+                        console.error("Merge failed for upload", e);
+                    }
+                }
+            }
+
+            if (!mergedBlob) {
+                console.warn(`Skipping group ${group.index}: No audio generated`);
+                continue;
+            }
+
+            // Check text change
+            // Logic: Compare current group.text with group.baizeData.text
+            // If different, we might need to update text for ALL baizeIds in this group?
+            // Requirement says: "aggregate text segmentation" (wait, splitting happens locally in Editor).
+            // "if text changed, sync to original script".
+
+            // Note: The editor might have split the text into segments.
+            // We should reconstruct the full text from segments? Or just use group.text (which might be the original full text)?
+            // The user can edit text in the "Regenerate" flow? Actually, TtsEditor UI allows regenerating a segment with *new text*.
+            // So we should check if the *current combined text of segments* matches the original text.
+            // But wait, group.text is the initial text. If user edited segments, group.text might be stale?
+            // TtsEditor doesn't seem to update group.text when segments are updated (handleUpdateSegment only updates segments).
+            // So we should iterate segments to build full text?
+            // Actually, let's look at `handleRegenerateSegment`. It updates `segments[i].text`.
+            // So yes, we should join segment texts.
+            const currentFullText = group.segments.map(s => s.text).join(''); // Assuming no delimiter needed for Chinese?
+            // Wait, original split might have removed punctuation or kept it?
+            // splitTextIntoSentences keeps delimiters?
+            // splitTextIntoSentences implementation: splits by ([。？]), pushes results.
+            // "result.push(currentSentence.trim())". It includes the delimiter if it was part of currentSentence.
+            // The split logic: "currentSentence += sentences[i]".
+            // Yes, it reconstructs sentences with punctuation.
+
+            const originalText = group.baizeData.text;
+            // Normalize for comparison (trim, maybe ignore spaces?)
+            const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
+
+            // Upload to the single ID for this group
+            const contentId = group.baizeData.id;
+            try {
+                // Upload Audio
+                const filename = `${group.index}_${contentId}.wav`;
+                const res = await uploadAudio(token, contentId, mergedBlob, filename);
+
+                // Check for locked message in response
+                if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+                    lockedErrorOccurred = true;
+                    failCount++;
+                } else if (res && res.code === "2000") {
+                        // Update Text if changed
+                    if (isTextChanged) {
+                        await updateScriptText(token, contentId, currentFullText);
+                    }
+                    successCount++;
+                } else {
+                    // Unexpected code
+                    throw new Error(res.msg || "上传失败");
+                }
+            } catch (e) {
+                console.error(`Failed to upload for contentId ${contentId}`, e);
+                // Check for locked message in error object if available
+                if (e.message && e.message.includes('锁定')) {
+                    lockedErrorOccurred = true;
+                }
+                failCount++;
+            }
+        }
+
+        if (lockedErrorOccurred) {
+            setResultDialogOpen(true);
+            setResultDialogMessage("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
+        }
+
+        setMessage({
+            text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个${lockedErrorOccurred ? ' (包含被锁定项目)' : ''}`,
+            type: failCount > 0 ? 'warning' : 'success'
+        });
+
+    } catch (error) {
+        setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
+    } finally {
+        // Lock Script
+        try {
+             await lockScript(token, tempScript.id);
+        } catch (lockError) {
+             console.error("Failed to lock script", lockError);
+             // If we're not already showing an error message, show this one
+             // But existing message might be "Upload complete...".
+             // We'll append a warning to the result dialog if it's open, or alert?
+             // Or just update the message.
+             const isError = failCount > 0 || lockedErrorOccurred;
+             setMessage(prev => ({
+                 text: prev.text + ` (注意: 话术锁定失败 - ${lockError.message})`,
+                 type: isError ? 'error' : 'warning'
+             }));
+        }
+        setIsUploading(false);
+    }
+  };
 
   // Split text into sentences
   const splitTextIntoSentences = useCallback((text) => {
@@ -415,7 +747,7 @@ function TtsEditor() {
     }
 
     let data = [];
-    if (tabValue === 1) { // Text tab
+    if (tabValue === 2) { // Text tab
       const text = textInput.trim();
       if (!text) {
         setMessage({ text: '请输入文本', type: 'error' });
@@ -427,12 +759,18 @@ function TtsEditor() {
         return;
       }
       data = lines.map((line, index) => ({ index: index + 1, text: line }));
-    } else { // Excel tab
+    } else if (tabValue === 1) { // Excel tab
       if (!excelDataRef.current) {
         setMessage({ text: '请选择Excel文件', type: 'error' });
         return;
       }
       data = excelDataRef.current;
+    } else if (tabValue === 0) { // Baize tab
+      if (!baizeDataRef.current) {
+        setMessage({ text: '请先导入话术', type: 'error' });
+        return;
+      }
+      data = baizeDataRef.current;
     }
 
     if (data.length === 0) {
@@ -465,7 +803,9 @@ function TtsEditor() {
         const audioGroup = {
           index: item.index,
           text: item.text,
-          segments: []
+          segments: [],
+          baizeData: item.baizeData, // Preserve Baize metadata if present
+          checked: true // Default to checked
         };
 
         for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
@@ -596,6 +936,17 @@ function TtsEditor() {
       setMessage({ text: `导出Excel失败: ${error.message}`, type: 'error' });
     }
   };
+
+  // Toggle group check
+  const handleToggleGroup = useCallback((groupIndex, isChecked) => {
+    setAudioGroups(prev => {
+      const updated = [...prev];
+      if (updated[groupIndex]) {
+        updated[groupIndex] = { ...updated[groupIndex], checked: isChecked };
+      }
+      return updated;
+    });
+  }, []);
 
   // Update segment callback
   const handleUpdateSegment = useCallback((groupIndex, segmentIndex, newData) => {
@@ -769,6 +1120,37 @@ function TtsEditor() {
 
               }}
             >
+              {/* Login Button (Absolute Position or in a specific place) */}
+              <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 1000 }}>
+                  {!user ? (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<LoginIcon />}
+                        onClick={handleLoginOpen}
+                        sx={{ borderRadius: 20 }}
+                      >
+                          登录
+                      </Button>
+                  ) : (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, bgcolor: 'white', p: 1, borderRadius: 20, boxShadow: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', px: 1 }}>
+                              {user.account}
+                          </Typography>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            startIcon={<LogoutIcon />}
+                            onClick={handleLogout}
+                            sx={{ borderRadius: 20 }}
+                          >
+                              退出
+                          </Button>
+                      </Box>
+                  )}
+              </Box>
+
             {/* <Grid item xs={12} md={5}> */}
                 <Paper
                   sx={{
@@ -918,6 +1300,7 @@ function TtsEditor() {
                 {/* Tabs */}
                 <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                   <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} centered>
+                    <Tab icon={<CloudDownloadIcon />} iconPosition="start" label="从白泽导入" />
                     <Tab icon={<UploadFileIcon />} iconPosition="start" label="Excel文件批量合成" />
                     <Tab icon={<KeyboardIcon />} iconPosition="start" label="输入文本逐行合成" />
                   </Tabs>
@@ -926,6 +1309,40 @@ function TtsEditor() {
                 {/* Tab Panels */}
                 <Box sx={{ mb: 3 }}>
                   {tabValue === 0 && (
+                     <Box sx={{
+                      p: 3,
+                      bgcolor: 'rgba(108, 92, 231, 0.03)',
+                      borderRadius: 2,
+                      border: '1px dashed',
+                      borderColor: 'primary.light'
+                    }}>
+                       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        从白泽系统导入话术语料，合成后可直接上传回系统
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                          <Button
+                              variant="contained"
+                              startIcon={<CloudDownloadIcon />}
+                              onClick={handleOpenScriptDialog}
+                              sx={{ px: 4 }}
+                          >
+                              导入话术
+                          </Button>
+                          <Button
+                              variant="contained"
+                              color="success"
+                              startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+                              onClick={handleBaizeUpload}
+                              disabled={isUploading}
+                              sx={{ px: 4 }}
+                          >
+                              {isUploading ? '正在上传...' : '上载到白泽'}
+                          </Button>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {tabValue === 1 && (
                     <Box sx={{ 
                       p: 3, 
                       bgcolor: 'rgba(108, 92, 231, 0.03)', 
@@ -976,7 +1393,7 @@ function TtsEditor() {
                       </Box>
                     </Box>
                   )}
-                  {tabValue === 1 && (
+                  {tabValue === 2 && (
                     <Box sx={{ 
                       p: 3, 
                       bgcolor: 'rgba(108, 92, 231, 0.03)', 
@@ -1101,6 +1518,8 @@ function TtsEditor() {
                       group={group}
                       groupIndex={groupIndex}
                       voice={voice}
+                      checked={group.checked}
+                      onToggle={(val) => handleToggleGroup(groupIndex, val)}
                       onDeleteGroup={handleDeleteGroup}
                       onDeleteSegment={handleDeleteSegment}
                       onUpdateSegment={handleUpdateSegment}
@@ -1206,6 +1625,176 @@ function TtsEditor() {
             <DialogActions>
               <Button onClick={handleClosePasteDialog}>取消</Button>
               <Button onClick={handlePasteConfirm} variant="contained">确认导入</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Login Dialog */}
+          <Dialog open={loginOpen} onClose={handleLoginClose}>
+            <DialogTitle>登录白泽系统</DialogTitle>
+            <DialogContent sx={{ pt: 2, minWidth: 300 }}>
+                <TextField
+                    autoFocus
+                    margin="dense"
+                    label="用户名"
+                    type="text"
+                    fullWidth
+                    variant="outlined"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    sx={{ mb: 2 }}
+                />
+                <TextField
+                    margin="dense"
+                    label="密码"
+                    type="password"
+                    fullWidth
+                    variant="outlined"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                />
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={handleLoginClose}>取消</Button>
+                <Button onClick={handleLoginSubmit} variant="contained">登录</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Script Selection Dialog */}
+          <Dialog open={scriptDialogOpen} onClose={() => setScriptDialogOpen(false)} maxWidth="sm" fullWidth>
+            <DialogTitle>选择话术导入</DialogTitle>
+            <DialogContent>
+                <Box sx={{ mb: 2, mt: 1 }}>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="搜索话术名称"
+                        value={scriptSearch}
+                        onChange={(e) => setScriptSearch(e.target.value)}
+                        placeholder="输入关键词筛选..."
+                    />
+                </Box>
+                {isFetchingScripts ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto' }}>
+                        {scriptList.filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase())).length > 0 ? (
+                            scriptList
+                                .filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase()))
+                                .map((script) => (
+                                <Box key={script.id}>
+                                    <ListItem disablePadding>
+                                        <ListItemButton onClick={() => handleScriptSelect(script)}>
+                                            <ListItemText
+                                                primary={script.scriptName}
+                                                secondary={`ID: ${script.id} | Industry: ${script.primaryIndustry}`}
+                                            />
+                                        </ListItemButton>
+                                    </ListItem>
+                                    <Divider />
+                                </Box>
+                            ))
+                        ) : (
+                            <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                                没有找到匹配的话术
+                            </Typography>
+                        )}
+                    </List>
+                )}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setScriptDialogOpen(false)}>取消</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Result Dialog */}
+          <Dialog open={resultDialogOpen} onClose={() => setResultDialogOpen(false)}>
+            <DialogTitle>操作结果提示</DialogTitle>
+            <DialogContent>
+                <Typography>{resultDialogMessage}</Typography>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setResultDialogOpen(false)} autoFocus>确定</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Corpus Selection Dialog */}
+          <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="md" fullWidth>
+            <DialogTitle>选择要导入的语料</DialogTitle>
+            <DialogContent>
+                <Box sx={{ mb: 2, mt: 1 }}>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="搜索语料内容"
+                        value={corpusSearch}
+                        onChange={(e) => setCorpusSearch(e.target.value)}
+                        placeholder="输入关键词筛选..."
+                    />
+                </Box>
+                {(() => {
+                    const filteredCorpus = corpusList.filter(item =>
+                        item.text.toLowerCase().includes(corpusSearch.toLowerCase()) ||
+                        item.index.toLowerCase().includes(corpusSearch.toLowerCase())
+                    );
+                    const allSelected = filteredCorpus.length > 0 && filteredCorpus.every(item => selectedCorpusIndices.has(item.uniqueId));
+
+                    return (
+                        <>
+                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, pl: 2 }}>
+                                <Checkbox
+                                    checked={allSelected}
+                                    indeterminate={filteredCorpus.some(item => selectedCorpusIndices.has(item.uniqueId)) && !allSelected}
+                                    onChange={() => handleCorpusSelectAll(filteredCorpus)}
+                                />
+                                <Typography variant="body2" fontWeight="bold">
+                                    全选 ({selectedCorpusIndices.size} / {corpusList.length})
+                                </Typography>
+                            </Box>
+                            <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto' }}>
+                                {filteredCorpus.length > 0 ? (
+                                    filteredCorpus.map((item) => (
+                                        <div key={item.uniqueId}>
+                                            <ListItem disablePadding>
+                                                <ListItemButton onClick={() => handleCorpusToggle(item.uniqueId)} dense>
+                                                    <ListItemIcon>
+                                                        <Checkbox
+                                                            edge="start"
+                                                            checked={selectedCorpusIndices.has(item.uniqueId)}
+                                                            tabIndex={-1}
+                                                            disableRipple
+                                                        />
+                                                    </ListItemIcon>
+                                                    <ListItemText
+                                                        primary={item.text}
+                                                        secondary={item.index}
+                                                        primaryTypographyProps={{
+                                                            style: {
+                                                                whiteSpace: 'nowrap',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis'
+                                                            }
+                                                        }}
+                                                    />
+                                                </ListItemButton>
+                                            </ListItem>
+                                            <Divider />
+                                        </div>
+                                    ))
+                                ) : (
+                                    <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                                        没有找到匹配的语料
+                                    </Typography>
+                                )}
+                            </List>
+                        </>
+                    );
+                })()}
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setCorpusDialogOpen(false)}>取消</Button>
+                <Button onClick={handleCorpusConfirm} variant="contained">确认导入</Button>
             </DialogActions>
           </Dialog>
       </Container>
