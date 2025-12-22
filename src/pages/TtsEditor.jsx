@@ -481,7 +481,8 @@ function TtsEditor() {
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
             // Iterate all original IDs for this aggregated group
-            for (const contentId of group.baizeData.baizeIds) {
+            // Use Promise.all for parallel uploads to improve performance and user experience
+            const uploadPromises = group.baizeData.baizeIds.map(async (contentId) => {
                 try {
                     // Upload Audio
                     // We upload the SAME merged audio to ALL original IDs.
@@ -492,12 +493,19 @@ function TtsEditor() {
                     if (isTextChanged) {
                         await updateScriptText(token, contentId, currentFullText);
                     }
-                    successCount++;
+                    return { success: true };
                 } catch (e) {
                     console.error(`Failed to upload for contentId ${contentId}`, e);
-                    failCount++;
+                    return { success: false, error: e };
                 }
-            }
+            });
+
+            const results = await Promise.all(uploadPromises);
+            const groupSuccess = results.filter(r => r.success).length;
+            const groupFail = results.filter(r => !r.success).length;
+
+            successCount += groupSuccess;
+            failCount += groupFail;
         }
 
         setMessage({ text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个`, type: failCount > 0 ? 'warning' : 'success' });
