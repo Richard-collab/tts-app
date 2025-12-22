@@ -236,6 +236,10 @@ function TtsEditor() {
   const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
   const [tempScript, setTempScript] = useState(null);
   
+  // Result Dialog State
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [resultDialogMessage, setResultDialogMessage] = useState('');
+
   // Progress state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -324,36 +328,23 @@ function TtsEditor() {
           const corpusData = res?.data?.scriptUnitContents || res?.scriptUnitContents;
 
           if (corpusData && Array.isArray(corpusData)) {
-              // Aggregate by content text
-              const aggregated = {};
-              corpusData.forEach(item => {
-                  const text = item.content; // assuming 'content' is the text field
-                  if (!text) return;
-
-                  if (!aggregated[text]) {
-                      aggregated[text] = {
-                          text: text,
-                          baizeIds: [], // Store all IDs that have this text
-                          originalData: []
-                      };
-                  }
-                  aggregated[text].baizeIds.push(item.id); // Assuming 'id' is the contentId
-                  aggregated[text].originalData.push(item);
-              });
-
-              // Prepare data for selection dialog
-              const preparedData = Object.keys(aggregated).map((text, idx) => ({
-                  index: aggregated[text].originalData[0].contentName || `导入语料-${idx+1}`,
-                  text: text,
-                  baizeData: aggregated[text],
-                  uniqueId: idx
+              // No aggregation
+              const preparedData = corpusData.map((item, idx) => ({
+                  index: item.contentName || `导入语料-${idx+1}`,
+                  text: item.content,
+                  baizeData: {
+                      id: item.id,
+                      text: item.content,
+                      originalData: item
+                  },
+                  uniqueId: item.id || idx // Use ID if available, else index
               }));
 
               setCorpusList(preparedData);
               setTempScript(script);
               setCorpusSearch('');
-              // Select all by default
-              setSelectedCorpusIndices(new Set(preparedData.map(item => item.uniqueId)));
+              // Select none by default
+              setSelectedCorpusIndices(new Set());
               setCorpusDialogOpen(true);
               setMessage({ text: '', type: '' });
           } else {
@@ -483,38 +474,40 @@ function TtsEditor() {
             // Normalize for comparison (trim, maybe ignore spaces?)
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
-            // Iterate all original IDs for this aggregated group
-            // Use serial uploads as requested to avoid overwhelming the server or client
-            for (const contentId of group.baizeData.baizeIds) {
-                try {
-                    // Upload Audio
-                    // We upload the SAME merged audio to ALL original IDs.
-                    const filename = `${group.index}_${contentId}.wav`;
-                    const res = await uploadAudio(token, contentId, mergedBlob, filename);
+            // Upload to the single ID for this group
+            const contentId = group.baizeData.id;
+            try {
+                // Upload Audio
+                const filename = `${group.index}_${contentId}.wav`;
+                const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
-                    // Check for locked message in response
-                    if (res && res.msg && res.msg.includes('被锁定')) {
-                        lockedErrorOccurred = true;
-                    }
-
-                    // Update Text if changed
+                // Check for locked message in response
+                if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+                    lockedErrorOccurred = true;
+                    failCount++;
+                } else if (res && res.code === "2000") {
+                        // Update Text if changed
                     if (isTextChanged) {
                         await updateScriptText(token, contentId, currentFullText);
                     }
                     successCount++;
-                } catch (e) {
-                    console.error(`Failed to upload for contentId ${contentId}`, e);
-                    // Check for locked message in error object if available
-                    if (e.message && e.message.includes('被锁定')) {
-                        lockedErrorOccurred = true;
-                    }
-                    failCount++;
+                } else {
+                    // Unexpected code
+                    throw new Error(res.msg || "上传失败");
                 }
+            } catch (e) {
+                console.error(`Failed to upload for contentId ${contentId}`, e);
+                // Check for locked message in error object if available
+                if (e.message && e.message.includes('锁定')) {
+                    lockedErrorOccurred = true;
+                }
+                failCount++;
             }
         }
 
         if (lockedErrorOccurred) {
-            alert("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
+            setResultDialogOpen(true);
+            setResultDialogMessage("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
         }
 
         setMessage({
@@ -1293,7 +1286,7 @@ function TtsEditor() {
                       borderColor: 'primary.light'
                     }}>
                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        从白泽系统导入话术语料，合成后可直接上传回系统（自动聚合同名文本）
+                        从白泽系统导入话术语料，合成后可直接上传回系统
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                           <Button
@@ -1681,6 +1674,17 @@ function TtsEditor() {
             </DialogContent>
             <DialogActions>
                 <Button onClick={() => setScriptDialogOpen(false)}>取消</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Result Dialog */}
+          <Dialog open={resultDialogOpen} onClose={() => setResultDialogOpen(false)}>
+            <DialogTitle>操作结果提示</DialogTitle>
+            <DialogContent>
+                <Typography>{resultDialogMessage}</Typography>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setResultDialogOpen(false)} autoFocus>确定</Button>
             </DialogActions>
           </Dialog>
 
