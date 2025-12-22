@@ -5,7 +5,6 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import ErrorIcon from '@mui/icons-material/Error';
 import WaveformEditor from './WaveformEditor';
@@ -21,7 +20,6 @@ function AudioItem({
   setMessage
 }) {
   const [text, setText] = useState(segment.text);
-  const [pauseDuration, setPauseDuration] = useState('1.0');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const audioRef = useRef(null);
@@ -30,41 +28,6 @@ function AudioItem({
   useEffect(() => {
     setText(segment.text);
   }, [segment.text]);
-
-  // Insert pause mark
-  const handleInsertPause = () => {
-    if (!textAreaRef.current) return;
-    
-    let duration = parseFloat(pauseDuration);
-    if (isNaN(duration) || duration < 0) duration = 1.0;
-    duration = Math.round(duration * 10) / 10;
-    setPauseDuration(duration.toFixed(1));
-
-    const durationMs = Math.round(duration * 1000);
-    let pauseMark = '';
-    if (voice.includes('MinMax')) {
-      pauseMark = `<#${duration}#>`;
-    } else if (voice.includes('阿里')) {
-      pauseMark = `<break time="${durationMs}ms"/>`;
-    } else {
-      return;
-    }
-
-    const startPos = textAreaRef.current.selectionStart;
-    const endPos = textAreaRef.current.selectionEnd;
-    const textBefore = text.substring(0, startPos);
-    const textAfter = text.substring(endPos);
-    const newText = textBefore + pauseMark + textAfter;
-    setText(newText);
-
-    setTimeout(() => {
-      textAreaRef.current.focus();
-      const newPos = startPos + pauseMark.length;
-      textAreaRef.current.setSelectionRange(newPos, newPos);
-    }, 0);
-
-    setMessage({ text: `已插入停顿标记: ${pauseMark}`, type: 'success' });
-  };
 
   // Regenerate audio
   const handleRegenerate = async () => {
@@ -135,26 +98,6 @@ function AudioItem({
             />
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Pause Controls */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <TextField
-                type="number"
-                size="small"
-                value={pauseDuration}
-                onChange={(e) => setPauseDuration(e.target.value)}
-                inputProps={{ step: 0.1, min: 0, max: 10, style: { width: 60, textAlign: 'center' } }}
-                sx={{ width: 80 }}
-              />
-              <Button
-                size="small"
-                variant="contained"
-                color="warning"
-                startIcon={<PauseCircleIcon />}
-                onClick={handleInsertPause}
-              >
-                插入停顿
-              </Button>
-            </Box>
             {/* Edit Button */}
             {!hasError && segment.url && (
               <Tooltip title="编辑波形">
