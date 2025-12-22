@@ -207,25 +207,24 @@ function AudioGroup({
           <Typography variant="subtitle1" fontWeight={600} color="primary">
             语料名称：{group.index}
           </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           {group.baizeData && (
               <Button
                   size="small"
                   variant={group.isUploaded ? "outlined" : "contained"}
-                  color={group.isUploaded ? "success" : "primary"}
+                  color="success"
                   startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
                   onClick={handleUpload}
                   disabled={isUploading || !hasValidSegments}
-                  sx={{ ml: 2 }}
               >
                   {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : '上传音频')}
               </Button>
           )}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             size="small"
             variant="contained"
-            color="error"
+            color="warning"
             startIcon={<DeleteIcon />}
             onClick={() => {
               if (window.confirm(`确定要删除语料"${group.index}"的所有音频片段吗？`)) {
