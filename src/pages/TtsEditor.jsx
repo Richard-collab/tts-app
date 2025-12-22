@@ -236,6 +236,10 @@ function TtsEditor() {
   const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
   const [tempScript, setTempScript] = useState(null);
   
+  // Result Dialog State
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [resultDialogMessage, setResultDialogMessage] = useState('');
+
   // Progress state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -352,8 +356,8 @@ function TtsEditor() {
               setCorpusList(preparedData);
               setTempScript(script);
               setCorpusSearch('');
-              // Select all by default
-              setSelectedCorpusIndices(new Set(preparedData.map(item => item.uniqueId)));
+              // Select none by default
+              setSelectedCorpusIndices(new Set());
               setCorpusDialogOpen(true);
               setMessage({ text: '', type: '' });
           } else {
@@ -493,19 +497,23 @@ function TtsEditor() {
                     const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
                     // Check for locked message in response
-                    if (res && res.msg && res.msg.includes('被锁定')) {
+                    if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
                         lockedErrorOccurred = true;
+                        failCount++;
+                    } else if (res && res.code === "2000") {
+                         // Update Text if changed
+                        if (isTextChanged) {
+                            await updateScriptText(token, contentId, currentFullText);
+                        }
+                        successCount++;
+                    } else {
+                        // Unexpected code
+                        throw new Error(res.msg || "上传失败");
                     }
-
-                    // Update Text if changed
-                    if (isTextChanged) {
-                        await updateScriptText(token, contentId, currentFullText);
-                    }
-                    successCount++;
                 } catch (e) {
                     console.error(`Failed to upload for contentId ${contentId}`, e);
                     // Check for locked message in error object if available
-                    if (e.message && e.message.includes('被锁定')) {
+                    if (e.message && e.message.includes('锁定')) {
                         lockedErrorOccurred = true;
                     }
                     failCount++;
@@ -514,7 +522,8 @@ function TtsEditor() {
         }
 
         if (lockedErrorOccurred) {
-            alert("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
+            setResultDialogOpen(true);
+            setResultDialogMessage("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
         }
 
         setMessage({
@@ -1681,6 +1690,17 @@ function TtsEditor() {
             </DialogContent>
             <DialogActions>
                 <Button onClick={() => setScriptDialogOpen(false)}>取消</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Result Dialog */}
+          <Dialog open={resultDialogOpen} onClose={() => setResultDialogOpen(false)}>
+            <DialogTitle>操作结果提示</DialogTitle>
+            <DialogContent>
+                <Typography>{resultDialogMessage}</Typography>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setResultDialogOpen(false)} autoFocus>确定</Button>
             </DialogActions>
           </Dialog>
 
