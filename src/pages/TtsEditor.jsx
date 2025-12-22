@@ -1128,7 +1128,7 @@ function TtsEditor() {
                         color="primary"
                         startIcon={<LoginIcon />}
                         onClick={handleLoginOpen}
-                        sx={{ borderRadius: 20 }}
+                        sx={{ borderRadius: 20, position: 'sticky'}}
                       >
                           登录
                       </Button>
@@ -1205,7 +1205,7 @@ function TtsEditor() {
                     left: 0,
                     right: 0,
                     height: '4px',
-                    background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
+                    // background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
                   }
                 }}
               >
@@ -1213,19 +1213,7 @@ function TtsEditor() {
                   variant="h4" 
                   component="h1" 
                   align="center" 
-                  sx={{ 
-                    mb: 1, 
-                    fontWeight: 700,
-                    '&::after': {
-                      content: '""',
-                      display: 'block',
-                      width: '60px',
-                      height: '3px',
-                      background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
-                      margin: '12px auto',
-                      borderRadius: '2px'
-                    }
-                  }}
+                  
                 >
                   语音合成
                 </Typography>
