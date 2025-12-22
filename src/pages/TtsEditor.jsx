@@ -233,6 +233,7 @@ function TtsEditor() {
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
   const [corpusList, setCorpusList] = useState([]);
   const [corpusSearch, setCorpusSearch] = useState('');
+  const [corpusFilterStatus, setCorpusFilterStatus] = useState('all');
   const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
   const [tempScript, setTempScript] = useState(null);
   
@@ -343,6 +344,7 @@ function TtsEditor() {
               setCorpusList(preparedData);
               setTempScript(script);
               setCorpusSearch('');
+              setCorpusFilterStatus('all');
               // Select none by default
               setSelectedCorpusIndices(new Set());
               setCorpusDialogOpen(true);
@@ -1723,7 +1725,7 @@ function TtsEditor() {
           <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="md" fullWidth>
             <DialogTitle>选择要导入的语料</DialogTitle>
             <DialogContent>
-                <Box sx={{ mb: 2, mt: 1 }}>
+                <Box sx={{ mb: 2, mt: 1, display: 'flex', gap: 2 }}>
                     <TextField
                         fullWidth
                         size="small"
@@ -1732,12 +1734,31 @@ function TtsEditor() {
                         onChange={(e) => setCorpusSearch(e.target.value)}
                         placeholder="输入关键词筛选..."
                     />
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel>验听状态</InputLabel>
+                        <Select
+                            value={corpusFilterStatus}
+                            label="验听状态"
+                            onChange={(e) => setCorpusFilterStatus(e.target.value)}
+                        >
+                            <MenuItem value="all">全部</MenuItem>
+                            <MenuItem value="played">已验听</MenuItem>
+                            <MenuItem value="unplayed">未验听</MenuItem>
+                        </Select>
+                    </FormControl>
                 </Box>
                 {(() => {
-                    const filteredCorpus = corpusList.filter(item =>
-                        item.text.toLowerCase().includes(corpusSearch.toLowerCase()) ||
-                        item.index.toLowerCase().includes(corpusSearch.toLowerCase())
-                    );
+                    const filteredCorpus = corpusList.filter(item => {
+                        const matchesSearch = item.text.toLowerCase().includes(corpusSearch.toLowerCase()) ||
+                                            item.index.toLowerCase().includes(corpusSearch.toLowerCase());
+                        let matchesFilter = true;
+                        if (corpusFilterStatus === 'played') {
+                            matchesFilter = item.baizeData?.originalData?.isPlay === true;
+                        } else if (corpusFilterStatus === 'unplayed') {
+                            matchesFilter = item.baizeData?.originalData?.isPlay === false;
+                        }
+                        return matchesSearch && matchesFilter;
+                    });
                     const allSelected = filteredCorpus.length > 0 && filteredCorpus.every(item => selectedCorpusIndices.has(item.uniqueId));
 
                     return (
