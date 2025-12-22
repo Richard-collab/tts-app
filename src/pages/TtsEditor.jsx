@@ -19,7 +19,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import AudioGroup from '../components/AudioGroup';
-import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText } from '../utils/baizeApi';
+import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript } from '../utils/baizeApi';
 import '../App.css';
 
 // Buffer to WAV (moved outside component)
@@ -394,6 +394,10 @@ function TtsEditor() {
 
   // Baize Upload Handler
   const handleBaizeUpload = async () => {
+    let successCount = 0;
+    let failCount = 0;
+    let lockedErrorOccurred = false;
+
     if (!token) {
         setMessage({ text: '请先登录', type: 'error' });
         return;
@@ -410,16 +414,28 @@ function TtsEditor() {
         return;
     }
 
+    if (!tempScript?.id) {
+        setMessage({ text: '无法获取话术ID，无法执行锁定操作', type: 'error' });
+        return;
+    }
+
     if (!window.confirm("确定要将生成的音频上传到系统吗？这将覆盖系统中的原有音频。")) {
         return;
     }
 
     setIsUploading(true);
-    setMessage({ text: '正在上传音频...', type: '' });
+    setMessage({ text: '正在解锁话术...', type: '' });
 
-    let successCount = 0;
-    let failCount = 0;
-    let lockedErrorOccurred = false;
+    // Unlock Script
+    try {
+        await unlockScript(token, tempScript.id);
+    } catch (error) {
+        setMessage({ text: `解锁话术失败: ${error.message}`, type: 'error' });
+        setIsUploading(false);
+        return;
+    }
+
+    setMessage({ text: '正在上传音频...', type: '' });
 
     try {
         for (const group of audioGroups) {
@@ -518,6 +534,21 @@ function TtsEditor() {
     } catch (error) {
         setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
     } finally {
+        // Lock Script
+        try {
+             await lockScript(token, tempScript.id);
+        } catch (lockError) {
+             console.error("Failed to lock script", lockError);
+             // If we're not already showing an error message, show this one
+             // But existing message might be "Upload complete...".
+             // We'll append a warning to the result dialog if it's open, or alert?
+             // Or just update the message.
+             const isError = failCount > 0 || lockedErrorOccurred;
+             setMessage(prev => ({
+                 text: prev.text + ` (注意: 话术锁定失败 - ${lockError.message})`,
+                 type: isError ? 'error' : 'warning'
+             }));
+        }
         setIsUploading(false);
     }
   };
