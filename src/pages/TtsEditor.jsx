@@ -16,6 +16,9 @@ import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ScienceIcon from '@mui/icons-material/Science';
+import HelpIcon from '@mui/icons-material/Help';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -229,6 +232,7 @@ function TtsEditor() {
   const [scriptSearch, setScriptSearch] = useState('');
   const [isFetchingScripts, setIsFetchingScripts] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
 
   // Corpus Dialog State
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
@@ -1650,6 +1654,27 @@ function TtsEditor() {
               </Paper>
             {/* </Grid> */}
 
+             {/* Help FAB */}
+             <Fab
+                color="info"
+                aria-label="help"
+                onClick={() => setHelpDialogOpen(true)}
+                sx={{
+                    position: 'fixed',
+                    bottom: 200,
+                    right: 40,
+                    zIndex: 1000,
+                    boxShadow: '0 8px 16px rgba(9, 132, 227, 0.4)',
+                    background: 'linear-gradient(45deg, #0984e3, #74b9ff)',
+                    '&:hover': {
+                        transform: 'scale(1.1)',
+                        boxShadow: '0 12px 20px rgba(9, 132, 227, 0.5)'
+                    }
+                }}
+             >
+                <HelpIcon />
+             </Fab>
+
              {/* Test Data FAB */}
              <Fab
                 color="primary"
@@ -2006,6 +2031,63 @@ function TtsEditor() {
             <DialogActions>
                 <Button onClick={() => setCorpusDialogOpen(false)}>取消</Button>
                 <Button onClick={handleCorpusConfirm} variant="contained">确认导入</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Help Dialog */}
+          <Dialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)}>
+            <DialogTitle>功能说明</DialogTitle>
+            <DialogContent>
+                <List>
+                    <ListItem>
+                        <ListItemIcon>
+                            <CloudUploadIcon color="success" />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="上传音频 (绿色)"
+                            secondary="将合成的音频合并并上传到白泽系统，同时更新话术文本。"
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <ListItemIcon>
+                            <DeleteIcon color="warning" />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="删除音频组 (黄色)"
+                            secondary="从编辑器中移除当前语料组及其所有片段。"
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <ListItemIcon>
+                            <PlayArrowIcon color="primary" />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="播放完整音频"
+                            secondary="按顺序播放当前语料组的所有音频片段。"
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <ListItemIcon>
+                            <DownloadIcon color="secondary" />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="下载完整音频"
+                            secondary="将当前语料组的所有片段合并为一个WAV文件并下载。"
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <ListItemIcon>
+                            <ScienceIcon color="primary" />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="添加测试数据"
+                            secondary="生成模拟的语料和音频数据，用于测试界面功能。"
+                        />
+                    </ListItem>
+                </List>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={() => setHelpDialogOpen(false)} autoFocus>关闭</Button>
             </DialogActions>
           </Dialog>
       </Container>
