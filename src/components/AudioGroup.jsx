@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  Box, Paper, Typography, Button, IconButton, Tooltip, Checkbox, CircularProgress
+  Box, Paper, Typography, Button, IconButton, Tooltip, Checkbox, CircularProgress, TextField
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -22,6 +22,7 @@ function AudioGroup({
   onUpdateSegment,
   onRegenerateSegment,
   onUploadGroup,
+  onUpdateGroupName,
   mergeAudioSegments,
   mergedAudiosRef,
   setMessage
@@ -204,9 +205,17 @@ function AudioGroup({
             color="primary"
           />
           <AudioFileIcon color="primary" />
-          <Typography variant="subtitle1" fontWeight={600} color="primary">
-            语料名称：{group.index}
-          </Typography>
+          <TextField
+            variant="standard"
+            value={group.index}
+            onChange={(e) => onUpdateGroupName && onUpdateGroupName(groupIndex, e.target.value)}
+            placeholder="语料名称"
+            InputProps={{
+              disableUnderline: true,
+              sx: { fontSize: '1rem', fontWeight: 600, color: '#1976d2' }
+            }}
+            sx={{ minWidth: 200 }}
+          />
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           {group.baizeData && (
