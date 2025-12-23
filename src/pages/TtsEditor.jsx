@@ -4,7 +4,7 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
-  ToggleButton, ToggleButtonGroup, Chip
+  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -253,6 +253,7 @@ function TtsEditor() {
   const [targetScript, setTargetScript] = useState(null);
   const [targetScriptCorpusList, setTargetScriptCorpusList] = useState([]);
   const [isLinkingScript, setIsLinkingScript] = useState(false); // Mode flag
+  const [syncTextEnabled, setSyncTextEnabled] = useState(true);
 
   // Result Dialog State
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -278,6 +279,28 @@ function TtsEditor() {
         setToken(savedToken);
     }
   }, []);
+
+  // Handler for linking script without importing content (context only)
+  const handleLinkScript = useCallback(() => {
+       if (!token) {
+          setMessage({ text: '请先登录', type: 'error' });
+          handleLoginOpen();
+          return;
+      }
+      setIsLinkingScript(true);
+      setScriptSearch('');
+      setScriptDialogOpen(true);
+      setIsFetchingScripts(true);
+      fetchScripts(token).then(res => {
+          if (res.code === "2000" && Array.isArray(res.data)) {
+            setScriptList(res.data);
+          } else {
+              // error handled in fetch or silenced
+          }
+      }).finally(() => {
+          setIsFetchingScripts(false);
+      });
+  }, [token]);
 
   // Merge audio segments (Moved UP to be accessible by handleSingleGroupUpload)
   const mergeAudioSegments = useCallback(async (audioSegments) => {
@@ -461,7 +484,7 @@ function TtsEditor() {
 
     // Validation against Target Script
     if (!targetScript || !targetScript.id) {
-        setMessage({ text: '请先选择目标话术 (在上方"目标话术"处选择)', type: 'error' });
+        handleLinkScript();
         return;
     }
 
@@ -515,7 +538,7 @@ function TtsEditor() {
         const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
         if (res && res.code === "2000") {
-            if (isTextChanged) {
+            if (isTextChanged && syncTextEnabled) {
                 const corpusId = matchedCorpus.baizeData.corpusId;
                 await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
             }
@@ -544,7 +567,7 @@ function TtsEditor() {
             console.error("Lock failed", e);
         }
     }
-  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments]);
+  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments, syncTextEnabled, handleLinkScript]);
 
   // Baize Upload Handler
   const handleBaizeUpload = async () => {
@@ -563,7 +586,7 @@ function TtsEditor() {
 
     // Validation
     if (!targetScript || !targetScript.id) {
-        setMessage({ text: '请先选择目标话术 (在上方"目标话术"处选择)', type: 'error' });
+        handleLinkScript();
         return;
     }
 
@@ -660,7 +683,7 @@ function TtsEditor() {
                     failCount++;
                 } else if (res && res.code === "2000") {
                         // Update Text if changed
-                    if (isTextChanged) {
+                    if (isTextChanged && syncTextEnabled) {
                         const corpusId = matchedCorpus.baizeData.corpusId;
                         await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
                     }
@@ -1175,28 +1198,6 @@ function TtsEditor() {
           return updated;
       });
   }, []);
-
-  // Handler for linking script without importing content (context only)
-  const handleLinkScript = () => {
-       if (!token) {
-          setMessage({ text: '请先登录', type: 'error' });
-          handleLoginOpen();
-          return;
-      }
-      setIsLinkingScript(true);
-      setScriptSearch('');
-      setScriptDialogOpen(true);
-      setIsFetchingScripts(true);
-      fetchScripts(token).then(res => {
-          if (res.code === "2000" && Array.isArray(res.data)) {
-            setScriptList(res.data);
-          } else {
-              // error handled in fetch or silenced
-          }
-      }).finally(() => {
-          setIsFetchingScripts(false);
-      });
-  };
 
   // Regenerate segment
   const handleRegenerateSegment = useCallback(async (groupIndex, segmentIndex, newText) => {
@@ -1960,6 +1961,15 @@ function TtsEditor() {
                         value={scriptSearch}
                         onChange={(e) => setScriptSearch(e.target.value)}
                         placeholder="输入关键词筛选..."
+                    />
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={syncTextEnabled}
+                                onChange={(e) => setSyncTextEnabled(e.target.checked)}
+                            />
+                        }
+                        label="同步文本内容"
                     />
                 </Box>
                 {isFetchingScripts ? (
