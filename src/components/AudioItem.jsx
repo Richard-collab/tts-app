@@ -155,6 +155,7 @@ function AudioItem({
             fullWidth
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onBlur={() => onUpdate({ text: text })}
             variant="standard"
             InputProps={{
               disableUnderline: true,
