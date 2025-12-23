@@ -118,7 +118,8 @@ export async function updateScriptText(token, contentId, corpusId, scriptId, new
         const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
-            'token': token
+            'token': token,
+            'content-type': 'application/json'
         },
         body: JSON.stringify({ 
             content: content,
