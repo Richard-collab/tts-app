@@ -218,18 +218,16 @@ function AudioGroup({
           />
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          {group.baizeData && (
-              <Button
-                  size="small"
-                  variant={group.isUploaded ? "outlined" : "contained"}
-                  color="success"
-                  startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
-                  onClick={handleUpload}
-                  disabled={isUploading || !hasValidSegments}
-              >
-                  {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : '上传音频')}
-              </Button>
-          )}
+          <Button
+              size="small"
+              variant={group.isUploaded ? "outlined" : "contained"}
+              color="success"
+              startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
+              onClick={handleUpload}
+              disabled={isUploading || !hasValidSegments}
+          >
+              {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : '上传音频')}
+          </Button>
           <Button
             size="small"
             variant="contained"
