@@ -3,7 +3,8 @@ import {
   Container, Paper, Typography, Box, Grid, FormControl, InputLabel, Select, MenuItem,
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
-  List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab
+  List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
+  ToggleButton, ToggleButtonGroup
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -1940,7 +1941,7 @@ function TtsEditor() {
           <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="md" fullWidth>
             <DialogTitle>选择要导入的语料</DialogTitle>
             <DialogContent>
-                <Box sx={{ mb: 2, mt: 1, display: 'flex', gap: 2 }}>
+                <Box sx={{ mb: 2, mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <TextField
                         fullWidth
                         size="small"
@@ -1949,18 +1950,30 @@ function TtsEditor() {
                         onChange={(e) => setCorpusSearch(e.target.value)}
                         placeholder="输入关键词筛选..."
                     />
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                        <InputLabel>验听状态</InputLabel>
-                        <Select
+                    <Box>
+                        <ToggleButtonGroup
                             value={corpusFilterStatus}
-                            label="验听状态"
-                            onChange={(e) => setCorpusFilterStatus(e.target.value)}
+                            exclusive
+                            onChange={(e, newStatus) => {
+                                if (newStatus !== null) {
+                                    setCorpusFilterStatus(newStatus);
+                                }
+                            }}
+                            aria-label="filter status"
+                            size="small"
+                            fullWidth
                         >
-                            <MenuItem value="all">全部</MenuItem>
-                            <MenuItem value="played">已验听</MenuItem>
-                            <MenuItem value="unplayed">未验听</MenuItem>
-                        </Select>
-                    </FormControl>
+                            <ToggleButton value="all" aria-label="Show All">
+                                全部
+                            </ToggleButton>
+                            <ToggleButton value="played" aria-label="Show Played">
+                                已验听
+                            </ToggleButton>
+                            <ToggleButton value="unplayed" aria-label="Show Unplayed">
+                                未验听
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Box>
                 </Box>
                 {(() => {
                     const filteredCorpus = corpusList.filter(item => {
