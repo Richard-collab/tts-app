@@ -13,6 +13,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/tts-editor" element={<TtsEditor />} />
+          <Route path="/test" element={<TtsEditor />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

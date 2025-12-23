@@ -1916,7 +1916,7 @@ function TtsEditor() {
           </Dialog>
 
           {/* Corpus Selection Dialog */}
-          <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="md" fullWidth>
+          <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="lg" fullWidth>
             <DialogTitle>选择语料</DialogTitle>
             <DialogContent>
                 <Box sx={{ mb: 2, mt: 1 }}>
