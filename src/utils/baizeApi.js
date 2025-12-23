@@ -108,24 +108,25 @@ export async function uploadAudio(token, contentId, wavBlob, filename) {
 
 // Update Text
 export async function updateScriptText(token, contentId, corpusId, scriptId, newText) {
-    const targetUrl = `${BASE_URL}/Aispeech/scriptCorpus/updateOneCorpusContent`;
+    const targetUrl = `${BASE_URL}/AiSpeech/scriptCorpus/updateOneCorpusContent`;
     const proxyUrl = `/api/proxy/post?url=${encodeURIComponent(targetUrl)}`;
 
     console.log(`[Placeholder] Updating text for contentId ${contentId} to: "${newText}"`);
 
-    const formData = new FormData();
-
-    formData.append('content', newText);
-    formData.append('contentId', contentId);
-    formData.append('corpusId', corpusId);
-    formData.append('scriptId', scriptId);
+    const content = newText;
 
         const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
             'token': token
         },
-        body: formData
+        body: JSON.stringify({ 
+            content: content,
+            contentId: contentId,
+            corpusId: corpusId,
+            scriptId: scriptId,
+
+        })
     });
 
     if (!response.ok) {
