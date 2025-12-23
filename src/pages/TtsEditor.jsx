@@ -383,6 +383,7 @@ function TtsEditor() {
                   audioStatus: item.audioStatus || '0',
                   baizeData: {
                       id: item.id,
+                      corpusId: item.corpusId,
                       text: item.content,
                       originalData: item
                   },
@@ -509,7 +510,8 @@ function TtsEditor() {
 
         if (res && res.code === "2000") {
             if (isTextChanged) {
-                await updateScriptText(token, contentId, currentFullText);
+                const corpusId = matchedCorpus.baizeData.corpusId;
+                await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
             }
 
             // Mark as uploaded
@@ -648,7 +650,8 @@ function TtsEditor() {
                 } else if (res && res.code === "2000") {
                         // Update Text if changed
                     if (isTextChanged) {
-                        await updateScriptText(token, contentId, currentFullText);
+                        const corpusId = matchedCorpus.baizeData.corpusId;
+                        await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
                     }
 
                     // Mark as uploaded in local state
