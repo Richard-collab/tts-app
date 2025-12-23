@@ -4,7 +4,7 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
-  ToggleButton, ToggleButtonGroup, Chip
+  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -253,6 +253,8 @@ function TtsEditor() {
   const [targetScript, setTargetScript] = useState(null);
   const [targetScriptCorpusList, setTargetScriptCorpusList] = useState([]);
   const [isLinkingScript, setIsLinkingScript] = useState(false); // Mode flag
+  const [syncText, setSyncText] = useState(true);
+  const [pendingUpload, setPendingUpload] = useState(false);
 
   // Result Dialog State
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -449,6 +451,28 @@ function TtsEditor() {
       setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
   };
 
+  // Handler for linking script without importing content (context only)
+  const handleLinkScript = useCallback(() => {
+       if (!token) {
+          setMessage({ text: '请先登录', type: 'error' });
+          handleLoginOpen();
+          return;
+      }
+      setIsLinkingScript(true);
+      setScriptSearch('');
+      setScriptDialogOpen(true);
+      setIsFetchingScripts(true);
+      fetchScripts(token).then(res => {
+          if (res.code === "2000" && Array.isArray(res.data)) {
+            setScriptList(res.data);
+          } else {
+              // error handled in fetch or silenced
+          }
+      }).finally(() => {
+          setIsFetchingScripts(false);
+      });
+  }, [token]);
+
   // Single Group Upload Handler
   const handleSingleGroupUpload = useCallback(async (groupIndex) => {
     const group = audioGroups[groupIndex];
@@ -515,7 +539,7 @@ function TtsEditor() {
         const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
         if (res && res.code === "2000") {
-            if (isTextChanged) {
+            if (isTextChanged && syncText) {
                 const corpusId = matchedCorpus.baizeData.corpusId;
                 await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
             }
@@ -544,10 +568,10 @@ function TtsEditor() {
             console.error("Lock failed", e);
         }
     }
-  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments]);
+  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments, syncText]);
 
   // Baize Upload Handler
-  const handleBaizeUpload = async () => {
+  const handleBaizeUpload = useCallback(async () => {
     let successCount = 0;
     let failCount = 0;
     let lockedErrorOccurred = false;
@@ -563,7 +587,9 @@ function TtsEditor() {
 
     // Validation
     if (!targetScript || !targetScript.id) {
-        setMessage({ text: '请先选择目标话术 (在上方"目标话术"处选择)', type: 'error' });
+        // If no target script, open dialog and set pending flag
+        setPendingUpload(true);
+        handleLinkScript();
         return;
     }
 
@@ -660,7 +686,7 @@ function TtsEditor() {
                     failCount++;
                 } else if (res && res.code === "2000") {
                         // Update Text if changed
-                    if (isTextChanged) {
+                    if (isTextChanged && syncText) {
                         const corpusId = matchedCorpus.baizeData.corpusId;
                         await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
                     }
@@ -716,7 +742,18 @@ function TtsEditor() {
         }
         setIsUploading(false);
     }
-  };
+  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments, syncText, handleLinkScript]);
+
+  // Auto-resume upload when targetScript is selected and pendingUpload is true
+  useEffect(() => {
+    if (targetScript && pendingUpload) {
+        setPendingUpload(false);
+        // Use a timeout to ensure state updates have propagated if needed, or just call directly
+        // handleBaizeUpload is now a dependency, so we need to be careful about infinite loops.
+        // But pendingUpload is set to false immediately.
+        handleBaizeUpload();
+    }
+  }, [targetScript, pendingUpload, handleBaizeUpload]);
 
   // Split text into sentences
   const splitTextIntoSentences = useCallback((text) => {
@@ -1175,28 +1212,6 @@ function TtsEditor() {
           return updated;
       });
   }, []);
-
-  // Handler for linking script without importing content (context only)
-  const handleLinkScript = () => {
-       if (!token) {
-          setMessage({ text: '请先登录', type: 'error' });
-          handleLoginOpen();
-          return;
-      }
-      setIsLinkingScript(true);
-      setScriptSearch('');
-      setScriptDialogOpen(true);
-      setIsFetchingScripts(true);
-      fetchScripts(token).then(res => {
-          if (res.code === "2000" && Array.isArray(res.data)) {
-            setScriptList(res.data);
-          } else {
-              // error handled in fetch or silenced
-          }
-      }).finally(() => {
-          setIsFetchingScripts(false);
-      });
-  };
 
   // Regenerate segment
   const handleRegenerateSegment = useCallback(async (groupIndex, segmentIndex, newText) => {
@@ -1961,6 +1976,16 @@ function TtsEditor() {
                         onChange={(e) => setScriptSearch(e.target.value)}
                         placeholder="输入关键词筛选..."
                     />
+                    <FormControlLabel
+                        control={
+                            <Checkbox
+                                checked={syncText}
+                                onChange={(e) => setSyncText(e.target.checked)}
+                                color="primary"
+                            />
+                        }
+                        label="同步话术文本 (上传音频时若文本有变更，同步更新系统文本)"
+                    />
                 </Box>
                 {isFetchingScripts ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -2234,7 +2259,7 @@ function TtsEditor() {
                         </ListItemIcon>
                         <ListItemText
                             primary="上传音频 (绿色)"
-                            secondary="将合成的音频合并并上传到白泽系统，同时更新话术文本。"
+                            secondary="将合成的音频合并并上传到白泽系统，可配置是否同步更新话术文本。"
                         />
                     </ListItem>
                     <ListItem>
