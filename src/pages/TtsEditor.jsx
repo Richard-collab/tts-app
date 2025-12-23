@@ -1586,31 +1586,29 @@ function TtsEditor() {
 
                 {/* Global Action Buttons */}
                 <Box sx={{ mb: 3 }}>
-                   {/* Row 1: Synthesis Button (Full Width) */}
-                   <Button
-                    fullWidth
-                    variant="contained"
-                    size="large"
-                    startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <BoltIcon />}
-                    onClick={handleSynthesize}
-                    disabled={isGenerating}
-                    className={!isGenerating ? 'pulse-animation' : ''}
-                    sx={{ 
-                      borderRadius: '8px',
-                      py: 1.5,
-                      mb: 2,
-                      fontSize: '1.2rem',
-                      fontWeight: 'bold',
-                      boxShadow: '0 4px 14px 0 rgba(108, 92, 231, 0.39)',
-                      background: 'linear-gradient(45deg, #6C5CE7 30%, #a29bfe 90%)',
-                    }}
-                  >
-                    {isGenerating ? '生成中...' : '开始逐个合成音频'}
-                  </Button>
+                   {/* Row 1: Synthesis Button (Centered) */}
+                   <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+                     <Button
+                      variant="contained"
+                      size="medium"
+                      startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <BoltIcon />}
+                      onClick={handleSynthesize}
+                      disabled={isGenerating}
+                      className={!isGenerating ? 'pulse-animation' : ''}
+                      sx={{
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 4px 14px 0 rgba(108, 92, 231, 0.39)',
+                        background: 'linear-gradient(45deg, #6C5CE7 30%, #a29bfe 90%)',
+                      }}
+                    >
+                      {isGenerating ? '生成中...' : '开始逐个合成音频'}
+                    </Button>
+                   </Box>
 
                   {/* Row 2: Export and Upload Buttons */}
                   <Grid container spacing={2}>
-                     <Grid item xs={4}>
+                     <Grid size={4}>
                         <Button
                             fullWidth
                             variant="contained"
@@ -1623,7 +1621,7 @@ function TtsEditor() {
                             {isDownloading ? '打包中...' : '打包导出所有音频'}
                         </Button>
                      </Grid>
-                     <Grid item xs={4}>
+                     <Grid size={4}>
                          <Button
                             fullWidth
                             variant="contained"
@@ -1636,7 +1634,7 @@ function TtsEditor() {
                              导出Excel文件
                          </Button>
                      </Grid>
-                     <Grid item xs={4}>
+                     <Grid size={4}>
                          <Button
                             fullWidth
                             variant="contained"
