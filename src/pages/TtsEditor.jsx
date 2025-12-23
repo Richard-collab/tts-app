@@ -470,7 +470,7 @@ function TtsEditor() {
 
     try {
         // Unlock Script
-        await unlockScript(token, tempScript.id);
+        await lockScript(token, tempScript.id);
 
         const currentFullText = group.segments.map(s => s.text).join('');
         const originalText = group.baizeData.text;
@@ -478,7 +478,7 @@ function TtsEditor() {
         const contentId = group.baizeData.id;
 
         // Upload Audio
-        const filename = `${group.index}_${contentId}.wav`;
+        const filename = `${group.index}.wav`;
         const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
         if (res && res.code === "2000") {
@@ -505,7 +505,7 @@ function TtsEditor() {
     } finally {
         // Lock Script
         try {
-            await lockScript(token, tempScript.id);
+            await unlockScript(token, tempScript.id);
         } catch (e) {
             console.error("Lock failed", e);
         }
@@ -546,9 +546,9 @@ function TtsEditor() {
     setIsUploading(true);
     setMessage({ text: '正在解锁话术...', type: '' });
 
-    // Unlock Script
+    // lock Script
     try {
-        await unlockScript(token, tempScript.id);
+        await lockScript(token, tempScript.id);
     } catch (error) {
         setMessage({ text: `解锁话术失败: ${error.message}`, type: 'error' });
         setIsUploading(false);
@@ -614,7 +614,7 @@ function TtsEditor() {
             const contentId = group.baizeData.id;
             try {
                 // Upload Audio
-                const filename = `${group.index}_${contentId}.wav`;
+                const filename = `${group.index}.wav`;
                 const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
                 // Check for locked message in response
@@ -678,9 +678,9 @@ function TtsEditor() {
     } catch (error) {
         setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
     } finally {
-        // Lock Script
+        // unLock Script
         try {
-             await lockScript(token, tempScript.id);
+             await unlockScript(token, tempScript.id);
         } catch (lockError) {
              console.error("Failed to lock script", lockError);
              // If we're not already showing an error message, show this one
@@ -1981,9 +1981,9 @@ function TtsEditor() {
                                             item.index.toLowerCase().includes(corpusSearch.toLowerCase());
                         let matchesFilter = true;
                         if (corpusFilterStatus === 'played') {
-                            matchesFilter = item.baizeData?.originalData?.isPlay === true;
+                            matchesFilter = item.baizeData?.originalData?.isPlayed === true;
                         } else if (corpusFilterStatus === 'unplayed') {
-                            matchesFilter = item.baizeData?.originalData?.isPlay === false;
+                            matchesFilter = item.baizeData?.originalData?.isPlayed === false;
                         }
                         return matchesSearch && matchesFilter;
                     });
