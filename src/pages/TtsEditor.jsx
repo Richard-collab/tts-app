@@ -248,7 +248,12 @@ function TtsEditor() {
 
   const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
   const [tempScript, setTempScript] = useState(null);
-  
+
+  // Validation State (Target Script)
+  const [targetScript, setTargetScript] = useState(null);
+  const [targetScriptCorpusList, setTargetScriptCorpusList] = useState([]);
+  const [isLinkingScript, setIsLinkingScript] = useState(false); // Mode flag
+
   // Result Dialog State
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [resultDialogMessage, setResultDialogMessage] = useState('');
@@ -384,24 +389,38 @@ function TtsEditor() {
                   uniqueId: item.id || idx // Use ID if available, else index
               }));
 
-              setCorpusList(preparedData);
-              setTempScript(script);
-              // Reset filters
-              setFilterCorpusName('');
-              setFilterTextContent('');
-              setFilterProcessFlow('');
-              setFilterCorpusType('全部');
-              setFilterAuditStatus('全部');
+              if (isLinkingScript) {
+                  // Only set target script for validation context
+                  setTargetScript(script);
+                  setTargetScriptCorpusList(preparedData);
+                  setMessage({ text: `已关联目标话术: ${script.scriptName}`, type: 'success' });
+                  setIsLinkingScript(false);
+              } else {
+                  // Standard Import flow
+                  setCorpusList(preparedData);
+                  setTempScript(script);
+                  // Auto-set target script as well for consistency
+                  setTargetScript(script);
+                  setTargetScriptCorpusList(preparedData);
 
-              // Select none by default
-              setSelectedCorpusIndices(new Set());
-              setCorpusDialogOpen(true);
-              setMessage({ text: '', type: '' });
+                  // Reset filters
+                  setFilterCorpusName('');
+                  setFilterTextContent('');
+                  setFilterProcessFlow('');
+                  setFilterCorpusType('全部');
+                  setFilterAuditStatus('全部');
+
+                  // Select none by default
+                  setSelectedCorpusIndices(new Set());
+                  setCorpusDialogOpen(true);
+                  setMessage({ text: '', type: '' });
+              }
           } else {
               throw new Error("话术语料为空或格式不正确");
           }
       } catch (error) {
           setMessage({ text: `获取话术语料失败: ${error.message}`, type: 'error' });
+          setIsLinkingScript(false);
       }
   };
 
@@ -438,12 +457,18 @@ function TtsEditor() {
         setMessage({ text: '请先登录', type: 'error' });
         return;
     }
-    if (!group.baizeData) {
-        setMessage({ text: '该语料不是从白泽导入的，无法上传', type: 'error' });
+
+    // Validation against Target Script
+    if (!targetScript || !targetScript.id) {
+        setMessage({ text: '请先选择目标话术 (在上方"目标话术"处选择)', type: 'error' });
         return;
     }
-    if (!tempScript?.id) {
-        setMessage({ text: '无法获取话术ID', type: 'error' });
+
+    // Find matching corpus in target script
+    // Loose matching: by index name (exact match)
+    const matchedCorpus = targetScriptCorpusList.find(c => c.index === group.index);
+    if (!matchedCorpus) {
+        setMessage({ text: `无法上传: 当前语料名称 "${group.index}" 不在目标话术 "${targetScript.scriptName}" 中`, type: 'error' });
         return;
     }
 
@@ -471,12 +496,12 @@ function TtsEditor() {
 
     try {
         // Unlock Script
-        await lockScript(token, tempScript.id);
+        await lockScript(token, targetScript.id);
 
         const currentFullText = group.segments.map(s => s.text).join('');
-        const originalText = group.baizeData.text;
+        const originalText = matchedCorpus.text; // Use matched corpus text as original reference
         const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
-        const contentId = group.baizeData.id;
+        const contentId = matchedCorpus.baizeData.id; // Use matched ID
 
         // Upload Audio
         const filename = `${group.index}.wav`;
@@ -490,7 +515,7 @@ function TtsEditor() {
             // Mark as uploaded
             setAudioGroups(prev => {
                 const updated = [...prev];
-                updated[groupIndex] = { ...updated[groupIndex], isUploaded: true };
+                updated[groupIndex] = { ...updated[groupIndex], isUploaded: true, baizeData: matchedCorpus.baizeData };
                 return updated;
             });
 
@@ -506,12 +531,12 @@ function TtsEditor() {
     } finally {
         // Lock Script
         try {
-            await unlockScript(token, tempScript.id);
+            await unlockScript(token, targetScript.id);
         } catch (e) {
             console.error("Lock failed", e);
         }
     }
-  }, [audioGroups, token, tempScript, mergeAudioSegments]);
+  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments]);
 
   // Baize Upload Handler
   const handleBaizeUpload = async () => {
@@ -528,20 +553,41 @@ function TtsEditor() {
         return;
     }
 
-    // Check if we have Baize data (ensure it was imported from Baize)
-    const hasBaizeData = audioGroups.some(g => g.baizeData);
-    if (!hasBaizeData) {
-        setMessage({ text: '当前语料不是从白泽导入的，无法上传', type: 'error' });
+    // Validation
+    if (!targetScript || !targetScript.id) {
+        setMessage({ text: '请先选择目标话术 (在上方"目标话术"处选择)', type: 'error' });
         return;
     }
 
-    if (!tempScript?.id) {
-        setMessage({ text: '无法获取话术ID，无法执行锁定操作', type: 'error' });
-        return;
+    // Identify valid groups to upload (those that exist in target script)
+    const groupsToUpload = [];
+    const skippedGroups = [];
+
+    for (let i = 0; i < audioGroups.length; i++) {
+        const group = audioGroups[i];
+        if (group.checked === false) continue;
+
+        const matchedCorpus = targetScriptCorpusList.find(c => c.index === group.index);
+        if (matchedCorpus) {
+            groupsToUpload.push({ group, index: i, matchedCorpus });
+        } else {
+            skippedGroups.push(group.index);
+        }
     }
 
-    if (!window.confirm("确定要将生成的音频上传到系统吗？这将覆盖系统中的原有音频。")) {
-        return;
+    if (groupsToUpload.length === 0) {
+         setMessage({ text: '没有与目标话术匹配的语料可上传 (请检查语料名称)', type: 'error' });
+         return;
+    }
+
+    if (skippedGroups.length > 0) {
+        if (!window.confirm(`发现 ${skippedGroups.length} 个语料未在目标话术中找到，将跳过上传。\n是否继续上传剩下的 ${groupsToUpload.length} 个语料？`)) {
+            return;
+        }
+    } else {
+         if (!window.confirm(`确定要将 ${groupsToUpload.length} 个语料上传到系统吗？这将覆盖系统中的原有音频。`)) {
+            return;
+        }
     }
 
     setIsUploading(true);
@@ -549,7 +595,7 @@ function TtsEditor() {
 
     // lock Script
     try {
-        await lockScript(token, tempScript.id);
+        await lockScript(token, targetScript.id);
     } catch (error) {
         setMessage({ text: `解锁话术失败: ${error.message}`, type: 'error' });
         setIsUploading(false);
@@ -559,10 +605,8 @@ function TtsEditor() {
     setMessage({ text: '正在上传音频...', type: '' });
 
     try {
-        for (let i = 0; i < audioGroups.length; i++) {
-            const group = audioGroups[i];
-            if (!group.baizeData) continue; // Skip non-baize groups
-            if (group.checked === false) continue; // Skip unchecked groups (default is true if undefined)
+        for (const item of groupsToUpload) {
+            const { group, index: i, matchedCorpus } = item;
 
             // Generate/Get merged audio for this group
             let mergedBlob = null;
@@ -587,11 +631,11 @@ function TtsEditor() {
 
             // Check text change
             const currentFullText = group.segments.map(s => s.text).join('');
-            const originalText = group.baizeData.text;
+            const originalText = matchedCorpus.text;
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
             // Upload to the single ID for this group
-            const contentId = group.baizeData.id;
+            const contentId = matchedCorpus.baizeData.id;
             try {
                 // Upload Audio
                 const filename = `${group.index}.wav`;
@@ -609,9 +653,9 @@ function TtsEditor() {
 
                     // Mark as uploaded in local state
                     setAudioGroups(prev => {
-                        return prev.map(item => {
-                            if (item.baizeData && item.baizeData.id === contentId) {
-                                return { ...item, isUploaded: true };
+                        return prev.map((item, idx) => {
+                            if (idx === i) {
+                                return { ...item, isUploaded: true, baizeData: matchedCorpus.baizeData };
                             }
                             return item;
                         });
@@ -637,17 +681,6 @@ function TtsEditor() {
             setResultDialogMessage("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
         }
 
-        // Batch update uploaded status for successfully processed groups (approximation for now,
-        // effectively we'd need to know WHICH ones succeeded.
-        // For accurate tracking, we should have tracked successful indices.)
-        // Given complexity, we might skip updating 'isUploaded' for batch upload OR
-        // we can just say "if successCount > 0, we can't easily map back without tracking".
-        // Let's assume user uses batch upload OR single upload.
-        // If batch upload succeeds, we *should* ideally mark them.
-        // But for now, let's leave batch upload as is (it doesn't update isUploaded specifically per item visibly yet,
-        // or we can just refresh the list? No, we don't fetch back).
-        // Let's just update the message.
-
         setMessage({
             text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个${lockedErrorOccurred ? ' (包含被锁定项目)' : ''}`,
             type: failCount > 0 ? 'warning' : 'success'
@@ -658,13 +691,9 @@ function TtsEditor() {
     } finally {
         // unLock Script
         try {
-             await unlockScript(token, tempScript.id);
+             await unlockScript(token, targetScript.id);
         } catch (lockError) {
              console.error("Failed to lock script", lockError);
-             // If we're not already showing an error message, show this one
-             // But existing message might be "Upload complete...".
-             // We'll append a warning to the result dialog if it's open, or alert?
-             // Or just update the message.
              const isError = failCount > 0 || lockedErrorOccurred;
              setMessage(prev => ({
                  text: prev.text + ` (注意: 话术锁定失败 - ${lockError.message})`,
@@ -1122,6 +1151,39 @@ function TtsEditor() {
     setMessage({ text: '音频组已删除', type: 'success' });
   }, []);
 
+  // Update group name callback
+  const handleUpdateGroupName = useCallback((groupIndex, newName) => {
+      setAudioGroups(prev => {
+          const updated = [...prev];
+          if (updated[groupIndex]) {
+              updated[groupIndex] = { ...updated[groupIndex], index: newName };
+          }
+          return updated;
+      });
+  }, []);
+
+  // Handler for linking script without importing content (context only)
+  const handleLinkScript = () => {
+       if (!token) {
+          setMessage({ text: '请先登录', type: 'error' });
+          handleLoginOpen();
+          return;
+      }
+      setIsLinkingScript(true);
+      setScriptSearch('');
+      setScriptDialogOpen(true);
+      setIsFetchingScripts(true);
+      fetchScripts(token).then(res => {
+          if (res.code === "2000" && Array.isArray(res.data)) {
+            setScriptList(res.data);
+          } else {
+              // error handled in fetch or silenced
+          }
+      }).finally(() => {
+          setIsFetchingScripts(false);
+      });
+  };
+
   // Regenerate segment
   const handleRegenerateSegment = useCallback(async (groupIndex, segmentIndex, newText) => {
     try {
@@ -1337,6 +1399,26 @@ function TtsEditor() {
                   输入文本或上传Excel文件，每行文本可按句号、问号分割成独立的音频片段，打包导出时会自动合并为完整音频
                 </Typography>
 
+                {/* Target Script Display */}
+                 <Box sx={{ mb: 3, p: 2, bgcolor: '#f0f4f8', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            目标话术 (用于上传验证)
+                        </Typography>
+                        <Typography variant="h6" color={targetScript ? 'primary' : 'text.disabled'}>
+                            {targetScript ? targetScript.scriptName : '未选择话术'}
+                            {targetScript && <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>ID: {targetScript.id}</Typography>}
+                        </Typography>
+                    </Box>
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleLinkScript}
+                    >
+                        {targetScript ? '切换话术' : '关联白泽话术'}
+                    </Button>
+                </Box>
+
                 {/* Controls Grid */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                   <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -1416,7 +1498,7 @@ function TtsEditor() {
                       borderColor: 'primary.light'
                     }}>
                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        从白泽系统导入话术语料，合成后可直接上传回系统
+                        从白泽系统导入话术语料作为编辑器初始内容。
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                           <Button
@@ -1425,17 +1507,7 @@ function TtsEditor() {
                               onClick={handleOpenScriptDialog}
                               sx={{ px: 4 }}
                           >
-                              导入话术
-                          </Button>
-                          <Button
-                              variant="contained"
-                              color="success"
-                              startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
-                              onClick={handleBaizeUpload}
-                              disabled={isUploading}
-                              sx={{ px: 4 }}
-                          >
-                              {isUploading ? '正在上传...' : '上载到白泽'}
+                              导入话术内容
                           </Button>
                       </Box>
                     </Box>
@@ -1512,9 +1584,11 @@ function TtsEditor() {
                   )}
                 </Box>
 
-                {/* Buttons */}
-                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mb: 3, flexWrap: 'wrap' }}>
-                  <Button
+                {/* Global Action Buttons */}
+                <Box sx={{ mb: 3 }}>
+                   {/* Row 1: Synthesis Button (Full Width) */}
+                   <Button
+                    fullWidth
                     variant="contained"
                     size="large"
                     startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <BoltIcon />}
@@ -1522,54 +1596,60 @@ function TtsEditor() {
                     disabled={isGenerating}
                     className={!isGenerating ? 'pulse-animation' : ''}
                     sx={{ 
-                      borderRadius: '40px', 
-                      px: 4,
-                      boxShadow: '0 8px 20px rgba(108, 92, 231, 0.3)'
+                      borderRadius: '8px',
+                      py: 1.5,
+                      mb: 2,
+                      fontSize: '1.2rem',
+                      fontWeight: 'bold',
+                      boxShadow: '0 4px 14px 0 rgba(108, 92, 231, 0.39)',
+                      background: 'linear-gradient(45deg, #6C5CE7 30%, #a29bfe 90%)',
                     }}
                   >
                     {isGenerating ? '生成中...' : '开始逐个合成音频'}
                   </Button>
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    size="large"
-                    startIcon={isDownloading ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
-                    onClick={handleDownloadAll}
-                    disabled={audioGroups.length === 0 || isDownloading}
-                    sx={{ 
-                      borderRadius: '40px', 
-                      px: 4,
-                      boxShadow: '0 8px 20px rgba(0, 206, 201, 0.3)'
-                    }}
-                  >
-                    {isDownloading ? '打包中...' : '打包导出所有音频'}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="secondary"
-                    size="large"
-                    startIcon={<DescriptionIcon />}
-                    onClick={handleExportExcel}
-                    disabled={audioGroups.length === 0 || isGenerating}
-                    sx={{
-                      borderRadius: '40px',
-                      px: 4,
-                      boxShadow: '0 8px 20px rgba(0, 206, 201, 0.3)'
-                    }}
-                  >
-                    导出Excel文件
-                  </Button>
-                  {/* <Button
-                    variant="outlined"
-                    size="large"
-                    onClick={handleGenerateTestAudio}
-                    sx={{ 
-                      borderRadius: '40px', 
-                      px: 4
-                    }}
-                  >
-                    生成测试音频
-                  </Button> */}
+
+                  {/* Row 2: Export and Upload Buttons */}
+                  <Grid container spacing={2}>
+                     <Grid item xs={4}>
+                        <Button
+                            fullWidth
+                            variant="contained"
+                            color="secondary"
+                            startIcon={isDownloading ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
+                            onClick={handleDownloadAll}
+                            disabled={audioGroups.length === 0 || isDownloading}
+                            sx={{ borderRadius: '8px', py: 1 }}
+                        >
+                            {isDownloading ? '打包中...' : '打包导出所有音频'}
+                        </Button>
+                     </Grid>
+                     <Grid item xs={4}>
+                         <Button
+                            fullWidth
+                            variant="contained"
+                            color="info" // Using info or secondary for visual distinction
+                            startIcon={<DescriptionIcon />}
+                            onClick={handleExportExcel}
+                            disabled={audioGroups.length === 0 || isGenerating}
+                             sx={{ borderRadius: '8px', py: 1 }}
+                         >
+                             导出Excel文件
+                         </Button>
+                     </Grid>
+                     <Grid item xs={4}>
+                         <Button
+                            fullWidth
+                            variant="contained"
+                            color="success"
+                            startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+                            onClick={handleBaizeUpload}
+                            disabled={isUploading}
+                             sx={{ borderRadius: '8px', py: 1 }}
+                        >
+                            {isUploading ? '正在上传...' : '上传到白泽'}
+                        </Button>
+                     </Grid>
+                  </Grid>
                 </Box>
 
                 {/* Progress */}
@@ -1624,6 +1704,7 @@ function TtsEditor() {
                       onUpdateSegment={handleUpdateSegment}
                       onRegenerateSegment={handleRegenerateSegment}
                       onUploadGroup={handleSingleGroupUpload}
+                      onUpdateGroupName={handleUpdateGroupName}
                       mergeAudioSegments={mergeAudioSegments}
                       mergedAudiosRef={mergedAudiosRef}
                       setMessage={setMessage}
