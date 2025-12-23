@@ -1925,8 +1925,8 @@ function TtsEditor() {
                     </Typography>
 
                     {/* Filters */}
-                    <Grid container spacing={2} sx={{ mb: 2 }}>
-                        <Grid item xs={4}>
+                    <Grid container spacing={2} sx={{ mb: 2, flexWrap: 'nowrap' }}>
+                        <Grid item xs sx={{ minWidth: 0 }}>
                             <TextField
                                 fullWidth
                                 size="small"
@@ -1935,7 +1935,7 @@ function TtsEditor() {
                                 onChange={(e) => setFilterCorpusName(e.target.value)}
                             />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs sx={{ minWidth: 0 }}>
                             <TextField
                                 fullWidth
                                 size="small"
@@ -1944,7 +1944,7 @@ function TtsEditor() {
                                 onChange={(e) => setFilterTextContent(e.target.value)}
                             />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs sx={{ minWidth: 0 }}>
                             <TextField
                                 fullWidth
                                 size="small"
@@ -1953,7 +1953,7 @@ function TtsEditor() {
                                 onChange={(e) => setFilterProcessFlow(e.target.value)}
                             />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs sx={{ minWidth: 0 }}>
                             <FormControl fullWidth size="small">
                                 <InputLabel>语料类型</InputLabel>
                                 <Select
@@ -1968,7 +1968,7 @@ function TtsEditor() {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs sx={{ minWidth: 0 }}>
                             <FormControl fullWidth size="small">
                                 <InputLabel>验听状态</InputLabel>
                                 <Select
