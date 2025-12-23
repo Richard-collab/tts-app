@@ -12,7 +12,7 @@ import WaveformEditor from './WaveformEditor';
 function AudioItem({
   segment,
   segmentIndex,
-  voice,
+  // voice, // Unused
   isCurrentlyPlaying,
   onDelete,
   onUpdate,

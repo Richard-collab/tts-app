@@ -4,7 +4,7 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
-  ToggleButton, ToggleButtonGroup
+  ToggleButton, ToggleButtonGroup, Chip
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -238,8 +238,14 @@ function TtsEditor() {
   // Corpus Dialog State
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
   const [corpusList, setCorpusList] = useState([]);
-  const [corpusSearch, setCorpusSearch] = useState('');
-  const [corpusFilterStatus, setCorpusFilterStatus] = useState('all');
+
+  // New Filters
+  const [filterCorpusName, setFilterCorpusName] = useState('');
+  const [filterTextContent, setFilterTextContent] = useState('');
+  const [filterProcessFlow, setFilterProcessFlow] = useState('');
+  const [filterCorpusType, setFilterCorpusType] = useState('全部');
+  const [filterAuditStatus, setFilterAuditStatus] = useState('全部');
+
   const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
   const [tempScript, setTempScript] = useState(null);
   
@@ -367,6 +373,9 @@ function TtsEditor() {
               const preparedData = corpusData.map((item, idx) => ({
                   index: item.contentName || `导入语料-${idx+1}`,
                   text: item.content,
+                  corpusType: item.corpusType || '',
+                  canvasName: item.canvasName || '',
+                  audioStatus: item.audioStatus || '0',
                   baizeData: {
                       id: item.id,
                       text: item.content,
@@ -377,8 +386,13 @@ function TtsEditor() {
 
               setCorpusList(preparedData);
               setTempScript(script);
-              setCorpusSearch('');
-              setCorpusFilterStatus('all');
+              // Reset filters
+              setFilterCorpusName('');
+              setFilterTextContent('');
+              setFilterProcessFlow('');
+              setFilterCorpusType('全部');
+              setFilterAuditStatus('全部');
+
               // Select none by default
               setSelectedCorpusIndices(new Set());
               setCorpusDialogOpen(true);
@@ -397,19 +411,6 @@ function TtsEditor() {
           newSelected.delete(id);
       } else {
           newSelected.add(id);
-      }
-      setSelectedCorpusIndices(newSelected);
-  };
-
-  const handleCorpusSelectAll = (filtered) => {
-      const filteredIds = filtered.map(item => item.uniqueId);
-      const allSelected = filteredIds.every(id => selectedCorpusIndices.has(id));
-
-      const newSelected = new Set(selectedCorpusIndices);
-      if (allSelected) {
-          filteredIds.forEach(id => newSelected.delete(id));
-      } else {
-          filteredIds.forEach(id => newSelected.add(id));
       }
       setSelectedCorpusIndices(newSelected);
   };
@@ -1916,111 +1917,216 @@ function TtsEditor() {
 
           {/* Corpus Selection Dialog */}
           <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="md" fullWidth>
-            <DialogTitle>选择要导入的语料</DialogTitle>
+            <DialogTitle>选择语料</DialogTitle>
             <DialogContent>
-                <Box sx={{ mb: 2, mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        label="搜索语料内容"
-                        value={corpusSearch}
-                        onChange={(e) => setCorpusSearch(e.target.value)}
-                        placeholder="输入关键词筛选..."
-                    />
-                    <Box>
-                        <ToggleButtonGroup
-                            value={corpusFilterStatus}
-                            exclusive
-                            onChange={(e, newStatus) => {
-                                if (newStatus !== null) {
-                                    setCorpusFilterStatus(newStatus);
-                                }
-                            }}
-                            aria-label="filter status"
-                            size="small"
-                            fullWidth
-                        >
-                            <ToggleButton value="all" aria-label="Show All">
-                                全部
-                            </ToggleButton>
-                            <ToggleButton value="played" aria-label="Show Played">
-                                已验听
-                            </ToggleButton>
-                            <ToggleButton value="unplayed" aria-label="Show Unplayed">
-                                未验听
-                            </ToggleButton>
-                        </ToggleButtonGroup>
-                    </Box>
-                </Box>
-                {(() => {
-                    const filteredCorpus = corpusList.filter(item => {
-                        const matchesSearch = item.text.toLowerCase().includes(corpusSearch.toLowerCase()) ||
-                                            item.index.toLowerCase().includes(corpusSearch.toLowerCase());
-                        let matchesFilter = true;
-                        if (corpusFilterStatus === 'played') {
-                            matchesFilter = item.baizeData?.originalData?.isPlayed === true;
-                        } else if (corpusFilterStatus === 'unplayed') {
-                            matchesFilter = item.baizeData?.originalData?.isPlayed === false;
-                        }
-                        return matchesSearch && matchesFilter;
-                    });
-                    const allSelected = filteredCorpus.length > 0 && filteredCorpus.every(item => selectedCorpusIndices.has(item.uniqueId));
+                <Box sx={{ mb: 2, mt: 1 }}>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                        当前话术: {tempScript?.scriptName}
+                    </Typography>
 
-                    return (
-                        <>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, pl: 2 }}>
-                                <Checkbox
-                                    checked={allSelected}
-                                    indeterminate={filteredCorpus.some(item => selectedCorpusIndices.has(item.uniqueId)) && !allSelected}
-                                    onChange={() => handleCorpusSelectAll(filteredCorpus)}
-                                />
-                                <Typography variant="body2" fontWeight="bold">
-                                    全选 ({selectedCorpusIndices.size} / {corpusList.length})
-                                </Typography>
-                            </Box>
-                            <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto' }}>
-                                {filteredCorpus.length > 0 ? (
-                                    filteredCorpus.map((item) => (
-                                        <div key={item.uniqueId}>
-                                            <ListItem disablePadding>
-                                                <ListItemButton onClick={() => handleCorpusToggle(item.uniqueId)} dense>
-                                                    <ListItemIcon>
-                                                        <Checkbox
-                                                            edge="start"
-                                                            checked={selectedCorpusIndices.has(item.uniqueId)}
-                                                            tabIndex={-1}
-                                                            disableRipple
-                                                        />
-                                                    </ListItemIcon>
-                                                    <ListItemText
-                                                        primary={item.text}
-                                                        secondary={item.index}
-                                                        primaryTypographyProps={{
-                                                            style: {
-                                                                whiteSpace: 'nowrap',
-                                                                overflow: 'hidden',
-                                                                textOverflow: 'ellipsis'
-                                                            }
-                                                        }}
-                                                    />
-                                                </ListItemButton>
-                                            </ListItem>
-                                            <Divider />
-                                        </div>
-                                    ))
-                                ) : (
-                                    <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                                        没有找到匹配的语料
+                    {/* Filters */}
+                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                        <Grid item xs={4}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                label="语料名称"
+                                value={filterCorpusName}
+                                onChange={(e) => setFilterCorpusName(e.target.value)}
+                            />
+                        </Grid>
+                        <Grid item xs={4}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                label="文字内容"
+                                value={filterTextContent}
+                                onChange={(e) => setFilterTextContent(e.target.value)}
+                            />
+                        </Grid>
+                        <Grid item xs={4}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                label="所属流程"
+                                value={filterProcessFlow}
+                                onChange={(e) => setFilterProcessFlow(e.target.value)}
+                            />
+                        </Grid>
+                        <Grid item xs={4}>
+                            <FormControl fullWidth size="small">
+                                <InputLabel>语料类型</InputLabel>
+                                <Select
+                                    value={filterCorpusType}
+                                    label="语料类型"
+                                    onChange={(e) => setFilterCorpusType(e.target.value)}
+                                >
+                                    <MenuItem value="全部">全部</MenuItem>
+                                    <MenuItem value="主流程">主流程</MenuItem>
+                                    <MenuItem value="知识库">知识库</MenuItem>
+                                    <MenuItem value="功能话术">功能话术</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                        <Grid item xs={4}>
+                            <FormControl fullWidth size="small">
+                                <InputLabel>验听状态</InputLabel>
+                                <Select
+                                    value={filterAuditStatus}
+                                    label="验听状态"
+                                    onChange={(e) => setFilterAuditStatus(e.target.value)}
+                                >
+                                    <MenuItem value="全部">全部</MenuItem>
+                                    <MenuItem value="未验听">未验听</MenuItem>
+                                    <MenuItem value="已验听">已验听</MenuItem>
+                                    <MenuItem value="已标记">已标记</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Grid>
+                    </Grid>
+
+                    {/* Filter Actions and List Logic */}
+                    {(() => {
+                        const filteredCorpus = corpusList.filter(item => {
+                            // 1. Corpus Name Match
+                            const nameMatch = !filterCorpusName || item.index.toLowerCase().includes(filterCorpusName.toLowerCase());
+
+                            // 2. Text Content Match
+                            const textMatch = !filterTextContent || item.text.toLowerCase().includes(filterTextContent.toLowerCase());
+
+                            // 3. Process Flow Match
+                            const flowMatch = !filterProcessFlow || item.canvasName.toLowerCase().includes(filterProcessFlow.toLowerCase());
+
+                            // 4. Corpus Type Match
+                            let typeMatch = false;
+                            const cType = item.corpusType || '';
+                            if (filterCorpusType === '全部') {
+                                typeMatch = true;
+                            } else if (filterCorpusType === '主流程') {
+                                typeMatch = cType.startsWith('MASTER_');
+                            } else if (filterCorpusType === '知识库') {
+                                typeMatch = cType.startsWith('KNOWLEDGE_');
+                            } else if (filterCorpusType === '功能话术') {
+                                typeMatch = cType.startsWith('FUNC_') || cType.startsWith('PRE_');
+                            }
+
+                            // 5. Audit Status Match
+                            let statusMatch = false;
+                            const aStatus = item.audioStatus; // '0', '1', '2'
+                            if (filterAuditStatus === '全部') {
+                                statusMatch = true;
+                            } else if (filterAuditStatus === '未验听') {
+                                statusMatch = aStatus === '0';
+                            } else if (filterAuditStatus === '已验听') {
+                                statusMatch = aStatus === '1';
+                            } else if (filterAuditStatus === '已标记') {
+                                statusMatch = aStatus === '2';
+                            }
+
+                            return nameMatch && textMatch && flowMatch && typeMatch && statusMatch;
+                        });
+
+                        const handleSelectCurrent = () => {
+                             const newSelected = new Set(selectedCorpusIndices);
+                             filteredCorpus.forEach(item => newSelected.add(item.uniqueId));
+                             setSelectedCorpusIndices(newSelected);
+                        };
+
+                        const handleClearAll = () => {
+                             setSelectedCorpusIndices(new Set());
+                        };
+
+                        return (
+                            <>
+                                <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                                    <Button variant="contained" size="small" onClick={handleSelectCurrent}>
+                                        追选当前
+                                    </Button>
+                                    <Button variant="contained" size="small" onClick={handleClearAll}>
+                                        全部清空
+                                    </Button>
+                                </Box>
+
+                                <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto', borderTop: '1px solid #eee' }}>
+                                    {filteredCorpus.length > 0 ? (
+                                        filteredCorpus.map((item) => {
+                                            const getStatusLabel = (status) => {
+                                                switch(status) {
+                                                    case '0': return '未验听';
+                                                    case '1': return '已验听';
+                                                    case '2': return '已标记';
+                                                    default: return '未知';
+                                                }
+                                            };
+                                            const getStatusColor = (status) => {
+                                                 switch(status) {
+                                                    case '0': return 'default';
+                                                    case '1': return 'success';
+                                                    case '2': return 'error'; // Marked often implies issue or special attention
+                                                    default: return 'default';
+                                                }
+                                            };
+
+                                            return (
+                                                <div key={item.uniqueId}>
+                                                    <ListItem disablePadding>
+                                                        <ListItemButton onClick={() => handleCorpusToggle(item.uniqueId)} dense alignItems="flex-start">
+                                                            <ListItemIcon sx={{ mt: 1 }}>
+                                                                <Checkbox
+                                                                    edge="start"
+                                                                    checked={selectedCorpusIndices.has(item.uniqueId)}
+                                                                    tabIndex={-1}
+                                                                    disableRipple
+                                                                />
+                                                            </ListItemIcon>
+                                                            <ListItemText
+                                                                primary={
+                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                                                        <Typography variant="subtitle1" component="span" fontWeight="bold">
+                                                                            {item.index}
+                                                                        </Typography>
+                                                                        {item.canvasName && (
+                                                                            <Chip label={item.canvasName} size="small" variant="outlined" />
+                                                                        )}
+                                                                        <Chip
+                                                                            label={getStatusLabel(item.audioStatus)}
+                                                                            size="small"
+                                                                            color={getStatusColor(item.audioStatus)}
+                                                                            sx={{ height: 20, fontSize: '0.7rem' }}
+                                                                        />
+                                                                    </Box>
+                                                                }
+                                                                secondary={
+                                                                    <Typography variant="body2" color="text.secondary">
+                                                                        {item.text}
+                                                                    </Typography>
+                                                                }
+                                                            />
+                                                        </ListItemButton>
+                                                    </ListItem>
+                                                    <Divider />
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
+                                            没有找到匹配的语料
+                                        </Typography>
+                                    )}
+                                </List>
+                                <Box sx={{ mt: 2, textAlign: 'right' }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        已选择 {selectedCorpusIndices.size} 个语料
                                     </Typography>
-                                )}
-                            </List>
-                        </>
-                    );
-                })()}
+                                </Box>
+                            </>
+                        );
+                    })()}
+                </Box>
             </DialogContent>
             <DialogActions>
                 <Button onClick={() => setCorpusDialogOpen(false)}>取消</Button>
-                <Button onClick={handleCorpusConfirm} variant="contained">确认导入</Button>
+                <Button onClick={handleCorpusConfirm} variant="contained">确定</Button>
             </DialogActions>
           </Dialog>
 
