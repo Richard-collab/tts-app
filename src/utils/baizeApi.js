@@ -106,12 +106,34 @@ export async function uploadAudio(token, contentId, wavBlob, filename) {
     return await response.json();
 }
 
-// Update Text (Placeholder)
-export async function updateScriptText(token, contentId, newText) {
-    console.warn("updateScriptText is a placeholder. Implementing basic log.");
+// Update Text
+export async function updateScriptText(token, contentId, corpusId, scriptId, newText) {
+    const targetUrl = `${BASE_URL}/Aispeech/scriptCorpus/updateOneCorpusContent`;
+    const proxyUrl = `/api/proxy/post?url=${encodeURIComponent(targetUrl)}`;
+
     console.log(`[Placeholder] Updating text for contentId ${contentId} to: "${newText}"`);
-    // Return a fake success response
-    return Promise.resolve({ success: true, message: "Placeholder: Text updated locally logged" });
+
+    const formData = new FormData();
+
+    formData.append('content', newText);
+    formData.append('contentId', contentId);
+    formData.append('corpusId', corpusId);
+    formData.append('scriptId', scriptId);
+
+        const response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+            'token': token
+        },
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        // Pass specific error message if available
+        throw new Error(errorData.msg || errorData.message || `Update content text failed: ${response.status}`);
+    }
+    return await response.json();
 }
 
 // Lock Script
