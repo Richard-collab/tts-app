@@ -558,14 +558,15 @@ function TtsEditor() {
     setMessage({ text: '正在上传音频...', type: '' });
 
     try {
-        for (const group of audioGroups) {
+        for (let i = 0; i < audioGroups.length; i++) {
+            const group = audioGroups[i];
             if (!group.baizeData) continue; // Skip non-baize groups
             if (group.checked === false) continue; // Skip unchecked groups (default is true if undefined)
 
             // Generate/Get merged audio for this group
             let mergedBlob = null;
-            if (mergedAudiosRef.current[audioGroups.indexOf(group)]) {
-                mergedBlob = mergedAudiosRef.current[audioGroups.indexOf(group)].blob;
+            if (mergedAudiosRef.current[i]) {
+                mergedBlob = mergedAudiosRef.current[i].blob;
             } else {
                 // Try to merge if valid segments exist
                 const validSegments = group.segments.filter(seg => !seg.error);
@@ -584,30 +585,8 @@ function TtsEditor() {
             }
 
             // Check text change
-            // Logic: Compare current group.text with group.baizeData.text
-            // If different, we might need to update text for ALL baizeIds in this group?
-            // Requirement says: "aggregate text segmentation" (wait, splitting happens locally in Editor).
-            // "if text changed, sync to original script".
-
-            // Note: The editor might have split the text into segments.
-            // We should reconstruct the full text from segments? Or just use group.text (which might be the original full text)?
-            // The user can edit text in the "Regenerate" flow? Actually, TtsEditor UI allows regenerating a segment with *new text*.
-            // So we should check if the *current combined text of segments* matches the original text.
-            // But wait, group.text is the initial text. If user edited segments, group.text might be stale?
-            // TtsEditor doesn't seem to update group.text when segments are updated (handleUpdateSegment only updates segments).
-            // So we should iterate segments to build full text?
-            // Actually, let's look at `handleRegenerateSegment`. It updates `segments[i].text`.
-            // So yes, we should join segment texts.
-            const currentFullText = group.segments.map(s => s.text).join(''); // Assuming no delimiter needed for Chinese?
-            // Wait, original split might have removed punctuation or kept it?
-            // splitTextIntoSentences keeps delimiters?
-            // splitTextIntoSentences implementation: splits by ([。？]), pushes results.
-            // "result.push(currentSentence.trim())". It includes the delimiter if it was part of currentSentence.
-            // The split logic: "currentSentence += sentences[i]".
-            // Yes, it reconstructs sentences with punctuation.
-
+            const currentFullText = group.segments.map(s => s.text).join('');
             const originalText = group.baizeData.text;
-            // Normalize for comparison (trim, maybe ignore spaces?)
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
             // Upload to the single ID for this group
@@ -629,14 +608,12 @@ function TtsEditor() {
 
                     // Mark as uploaded in local state
                     setAudioGroups(prev => {
-                        // Note: Using prev directly might be unsafe in async loop if indices shift,
-                        // but here we are iterating stable list.
-                        // However, setAudioGroups inside loop triggers re-renders.
-                        // Better to collect uploaded indices and update once at end, or update functional.
-                        // For simplicity, we won't update state inside loop to avoid perf issues,
-                        // OR we update them all at the end.
-                        // Let's update at the end for batch upload.
-                        return prev;
+                        return prev.map(item => {
+                            if (item.baizeData && item.baizeData.id === contentId) {
+                                return { ...item, isUploaded: true };
+                            }
+                            return item;
+                        });
                     });
 
                     successCount++;
