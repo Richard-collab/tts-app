@@ -502,6 +502,12 @@ function TtsEditor() {
         const currentFullText = group.segments.map(s => s.text).join('');
         const originalText = matchedCorpus.text; // Use matched corpus text as original reference
         const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
+
+        console.log(`[Upload] Group: ${group.index}`);
+        console.log(`[Upload] Original: "${originalText}"`);
+        console.log(`[Upload] Current:  "${currentFullText}"`);
+        console.log(`[Upload] Changed?: ${isTextChanged}`);
+
         const contentId = matchedCorpus.baizeData.id; // Use matched ID
 
         // Upload Audio
@@ -635,6 +641,11 @@ function TtsEditor() {
             const currentFullText = group.segments.map(s => s.text).join('');
             const originalText = matchedCorpus.text;
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
+
+            console.log(`[BatchUpload] Group: ${group.index}`);
+            console.log(`[BatchUpload] Original: "${originalText}"`);
+            console.log(`[BatchUpload] Current:  "${currentFullText}"`);
+            console.log(`[BatchUpload] Changed?: ${isTextChanged}`);
 
             // Upload to the single ID for this group
             const contentId = matchedCorpus.baizeData.id;
