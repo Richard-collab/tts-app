@@ -156,9 +156,13 @@ function AudioItem({
             value={text}
             onChange={(e) => setText(e.target.value)}
             variant="standard"
+            placeholder="输入文本..."
             InputProps={{
               disableUnderline: true,
               sx: { fontSize: '0.9rem' }
+            }}
+            inputProps={{
+              'aria-label': `编辑片段 ${segmentIndex + 1} 的文本`
             }}
           />
         </Box>

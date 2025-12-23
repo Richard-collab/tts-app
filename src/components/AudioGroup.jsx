@@ -202,6 +202,7 @@ function AudioGroup({
             checked={!!checked}
             onChange={(e) => onToggle(e.target.checked)}
             color="primary"
+            inputProps={{ 'aria-label': `选择语料 ${group.index}` }}
           />
           <AudioFileIcon color="primary" />
           <Typography variant="subtitle1" fontWeight={600} color="primary">
