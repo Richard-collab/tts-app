@@ -26,6 +26,7 @@ import { saveAs } from 'file-saver';
 import AudioGroup from '../components/AudioGroup';
 import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript } from '../utils/baizeApi';
 import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
+import { splitTextIntoSentences } from '../utils/textUtils';
 import '../App.css';
 
 // Voice options
@@ -806,26 +807,6 @@ function TtsEditor() {
         setIsUploading(false);
     }
   };
-
-  // Split text into sentences
-  const splitTextIntoSentences = useCallback((text) => {
-    const sentences = text.split(/([。？])/);
-    const result = [];
-    let currentSentence = '';
-    
-    for (let i = 0; i < sentences.length; i++) {
-      if (sentences[i].trim() === '') continue;
-      currentSentence += sentences[i];
-      if (sentences[i] === '。' || sentences[i] === '？') {
-        result.push(currentSentence.trim());
-        currentSentence = '';
-      }
-    }
-    if (currentSentence.trim() !== '') {
-      result.push(currentSentence.trim());
-    }
-    return result.filter(sentence => sentence.length > 0);
-  }, []);
 
   // Parse Excel file
   const parseExcelFile = useCallback((file) => {
