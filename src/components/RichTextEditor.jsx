@@ -22,11 +22,11 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
       // Restore specific tags we want to visualize
       .replace(/&lt;break time="(\d+)ms"\/?&gt;/g, (match, ms) => {
         const sec = (parseInt(ms) / 1000).toFixed(1);
-        return `<span class="pause-pill" contenteditable="false" data-duration="${sec}">|| ${sec}s</span>`;
+        return `<span class="pause-pill" contenteditable="false" data-duration="${sec}"> 停顿 ${sec}s</span>`;
       })
       .replace(/&lt;#([\d\.]+)#&gt;/g, (match, sec) => {
         const duration = parseFloat(sec).toFixed(1);
-        return `<span class="pause-pill" contenteditable="false" data-duration="${duration}">|| ${duration}s</span>`;
+        return `<span class="pause-pill" contenteditable="false" data-duration="${duration}"> 停顿 ${duration}s</span>`;
       });
 
     // Handle newlines
@@ -171,7 +171,7 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
       }
 
       const duration = 1.0;
-      const pillHtml = `<span class="pause-pill" contenteditable="false" data-duration="${duration.toFixed(1)}">|| ${duration.toFixed(1)}s</span>`;
+      const pillHtml = `<span class="pause-pill" contenteditable="false" data-duration="${duration.toFixed(1)}">停顿 ${duration.toFixed(1)}s</span>`;
 
       document.execCommand('insertHTML', false, pillHtml);
       handleInput();
@@ -251,7 +251,7 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
             onClick={handleApplyDuration}
             sx={{ bgcolor: '#212121', color: 'white', '&:hover': { bgcolor: 'black' } }}
           >
-            Apply
+            应用
           </Button>
         </Box>
       </Popover>
