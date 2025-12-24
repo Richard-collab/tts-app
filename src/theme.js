@@ -1,5 +1,17 @@
 import { createTheme } from '@mui/material/styles';
 
+// Helper to create consistent gradient button styles
+const createGradientBtn = (startColor, endColor, shadowColor) => ({
+  background: `linear-gradient(45deg, ${startColor} 30%, ${endColor} 90%)`,
+  color: 'white',
+  boxShadow: `0 3px 5px 2px ${shadowColor}1a`, // ~10% opacity
+  '&:hover': {
+    background: `linear-gradient(45deg, ${startColor} 30%, ${endColor} 90%)`,
+    boxShadow: `0 10px 20px ${shadowColor}4d`, // ~30% opacity
+    transform: 'translateY(-2px)',
+  },
+});
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -9,6 +21,18 @@ const theme = createTheme({
     },
     secondary: {
       main: '#00CEC9',
+    },
+    success: {
+      main: '#00b894',
+    },
+    error: {
+      main: '#FF4757',
+    },
+    warning: {
+      main: '#FFA502',
+    },
+    info: {
+      main: '#1E90FF',
     },
     background: {
       default: '#F9F8FF',
@@ -32,18 +56,16 @@ const theme = createTheme({
           transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
         },
         contained: {
-          background: 'linear-gradient(45deg, #6C5CE7 30%, #A29BFE 90%)',
           color: 'white',
-          boxShadow: '0 3px 5px 2px rgba(108, 92, 231, .1)',
-          '&:hover': {
-            background: 'linear-gradient(45deg, #6C5CE7 30%, #A29BFE 90%)', // Keep the same gradient
-            boxShadow: '0 10px 20px rgba(108, 92, 231, 0.3)', // Lifted shadow
-            transform: 'translateY(-2px)', // Lift up effect
-          },
+          // Generic background removed to allow specific variant gradients
         },
-        // Also style outlined/text buttons to have the lift effect without the gradient if desired,
-        // but the user specifically asked for "Gradient". I will apply the gradient primarily to "contained" buttons
-        // as that's the standard for primary actions.
+        containedPrimary: createGradientBtn('#6C5CE7', '#A29BFE', '#6C5CE7'),
+        containedSecondary: createGradientBtn('#00CEC9', '#81ECEC', '#00CEC9'),
+        containedSuccess: createGradientBtn('#00b894', '#55efc4', '#00b894'),
+        containedError: createGradientBtn('#FF4757', '#ff7675', '#FF4757'),
+        containedWarning: createGradientBtn('#FFA502', '#ffeaa7', '#FFA502'),
+        containedInfo: createGradientBtn('#1E90FF', '#74b9ff', '#1E90FF'),
+
         outlined: {
           '&:hover': {
              transform: 'translateY(-2px)',
