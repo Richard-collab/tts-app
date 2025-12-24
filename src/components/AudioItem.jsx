@@ -70,11 +70,14 @@ function AudioItem({
         sx={{
           mb: 2,
           p: 2,
-          bgcolor: segment.recent ? 'rgba(253, 203, 110, 0.15)' : (isCurrentlyPlaying ? 'rgba(255, 165, 0, 0.05)' : 'rgba(255, 255, 255, 0.7)'),
+          bgcolor: 'background.paper',
           borderRadius: 2,
-          borderLeft: '3px solid',
-          borderLeftColor: hasError ? 'error.main' : (segment.recent ? 'warning.main' : (isCurrentlyPlaying ? '#FF9800' : 'primary.light')),
-          transition: 'all 0.3s ease'
+          border: '1px solid',
+          borderColor: 'divider',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+              borderColor: 'text.primary'
+          }
         }}
         className="fade-in"
       >
@@ -83,8 +86,8 @@ function AudioItem({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box
               sx={{
-                width: 16,
-                height: 16,
+                width: 10,
+                height: 10,
                 borderRadius: '50%',
                 bgcolor: segment.recent ? 'warning.main' : (segment.played ? 'success.main' : 'grey.400'),
                 transition: 'all 0.3s ease'
@@ -93,8 +96,9 @@ function AudioItem({
             <Chip
               icon={<MusicNoteIcon />}
               label={`片段 ${segmentIndex + 1}`}
-              color="primary"
+              variant="outlined"
               size="small"
+              sx={{ borderColor: 'transparent' }}
             />
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -103,8 +107,8 @@ function AudioItem({
               <Tooltip title="编辑波形">
                 <Button
                   size="small"
-                  variant="contained"
-                  color="info"
+                  variant="outlined"
+                  color="secondary"
                   startIcon={<EditIcon />}
                   onClick={() => {
                     setEditorOpen(true);
@@ -118,7 +122,7 @@ function AudioItem({
             {/* Delete Button */}
             <Button
               size="small"
-              variant="contained"
+              variant="text"
               color="error"
               startIcon={<DeleteIcon />}
               onClick={onDelete}
@@ -128,7 +132,8 @@ function AudioItem({
             {/* Regenerate Button */}
             <Button
               size="small"
-              variant="contained"
+              variant="outlined"
+              color="primary"
               startIcon={<RefreshIcon />}
               onClick={handleRegenerate}
               disabled={isRegenerating}
@@ -143,10 +148,8 @@ function AudioItem({
           sx={{
             p: 1.5,
             mb: 1.5,
-            bgcolor: segment.recent ? 'rgba(253, 203, 110, 0.1)' : (isCurrentlyPlaying ? 'rgba(255, 165, 0, 0.05)' : 'rgba(108, 92, 231, 0.05)'),
-            borderLeft: '3px solid',
-            borderLeftColor: segment.recent ? 'warning.main' : (isCurrentlyPlaying ? '#FF9800' : 'primary.main'),
-            borderRadius: '0 6px 6px 0'
+            bgcolor: 'background.default',
+            borderRadius: 2
           }}
         >
           <TextField
