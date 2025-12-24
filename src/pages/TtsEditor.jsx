@@ -1279,6 +1279,8 @@ function TtsEditor() {
     }
   }, [setAudioGroups, setMessage]);
 
+  const showProgress = audioGroups.length > 0 && baizeDataRef.current;
+
   return (
       <Container maxWidth="xl" sx={{ py: 3 }}>
           {/* <Grid container spacing={3} justifyContent="center"> */}
@@ -1734,10 +1736,11 @@ function TtsEditor() {
                 onClick={() => setHelpDialogOpen(true)}
                 sx={{
                     position: 'fixed',
-                    bottom: 200,
+                    bottom: showProgress ? 300 : 200,
                     right: 40,
                     zIndex: 1000,
                     boxShadow: '0 8px 16px rgba(9, 132, 227, 0.4)',
+                    transition: 'bottom 0.3s ease',
                     background: 'linear-gradient(45deg, #0984e3, #74b9ff)',
                     '&:hover': {
                         transform: 'scale(1.1)',
@@ -1755,10 +1758,11 @@ function TtsEditor() {
                 onClick={handleAddTestData}
                 sx={{
                     position: 'fixed',
-                    bottom: 120,
+                    bottom: showProgress ? 220 : 120,
                     right: 40,
                     zIndex: 1000,
                     boxShadow: '0 8px 16px rgba(108, 92, 231, 0.4)',
+                    transition: 'bottom 0.3s ease',
                     background: 'linear-gradient(45deg, #6C5CE7, #a29bfe)',
                     '&:hover': {
                         transform: 'scale(1.1)',
