@@ -253,9 +253,13 @@ function TtsEditor() {
   const [targetScript, setTargetScript] = useState(null);
   const [targetScriptCorpusList, setTargetScriptCorpusList] = useState([]);
   // const [isLinkingScript, setIsLinkingScript] = useState(false); // Deprecated: Mode flag
-  const [scriptDialogMode, setScriptDialogMode] = useState(''); // 'import' | 'link' | 'batch_upload'
+  const [scriptDialogMode, setScriptDialogMode] = useState(''); // 'import' | 'link' | 'batch_upload' | 'single_upload'
   const [selectedScript, setSelectedScript] = useState(null);
   const [syncTextEnabled, setSyncTextEnabled] = useState(true);
+
+  // New State for Single Upload Workflow
+  const [singleUploadGroupIndex, setSingleUploadGroupIndex] = useState(null);
+  const [hasConfirmedSingleUploadScript, setHasConfirmedSingleUploadScript] = useState(false);
 
   // Result Dialog State
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -475,17 +479,32 @@ function TtsEditor() {
       }
       setScriptDialogOpen(false);
 
+      // If script changed, reset the single upload confirmation flag
+      if (targetScript && selectedScript.id !== targetScript.id) {
+         setHasConfirmedSingleUploadScript(false);
+      }
+
       if (scriptDialogMode === 'import' || scriptDialogMode === 'link') {
           await executeScriptSelectionAction(selectedScript, scriptDialogMode);
       } else if (scriptDialogMode === 'batch_upload') {
           try {
-             // 1. Update/Link script first
              const corpusList = await executeScriptSelectionAction(selectedScript, 'batch_upload');
-             // 2. Trigger Upload (need to pass data since state update might lag slightly if we relied on targetScript immediately)
-             // We can use selectedScript and corpusList explicitly
              executeBatchUpload(selectedScript, corpusList);
           } catch (e) {
              console.error("Batch upload preparation failed", e);
+          }
+      } else if (scriptDialogMode === 'single_upload') {
+          try {
+              const corpusList = await executeScriptSelectionAction(selectedScript, 'batch_upload'); // Reuse 'batch_upload' mode logic to get data/link without extra side effects
+
+              setHasConfirmedSingleUploadScript(true); // Mark as confirmed
+
+              if (singleUploadGroupIndex !== null) {
+                  executeSingleUpload(singleUploadGroupIndex, selectedScript, corpusList);
+                  setSingleUploadGroupIndex(null);
+              }
+          } catch (e) {
+              console.error("Single upload preparation failed", e);
           }
       }
   };
@@ -514,107 +533,130 @@ function TtsEditor() {
       setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
   };
 
-  // Single Group Upload Handler
-  const handleSingleGroupUpload = useCallback(async (groupIndex) => {
-    const group = audioGroups[groupIndex];
-    if (!group) return;
+  // Core Logic for Single Upload (Extracted)
+  const executeSingleUpload = useCallback(async (groupIndex, activeScript, activeCorpusList) => {
+      const group = audioGroups[groupIndex];
+      if (!group) return;
 
+      // Find matching corpus in target script
+      const matchedCorpus = activeCorpusList.find(c => c.index === group.index);
+      if (!matchedCorpus) {
+          setMessage({ text: `无法上传: 当前语料名称 "${group.index}" 不在目标话术 "${activeScript.scriptName}" 中`, type: 'error' });
+          return;
+      }
+
+      // Try to merge if valid segments exist
+      let mergedBlob = null;
+      if (mergedAudiosRef.current[groupIndex]) {
+          mergedBlob = mergedAudiosRef.current[groupIndex].blob;
+      } else {
+          const validSegments = group.segments.filter(seg => !seg.error);
+          if (validSegments.length > 0) {
+              try {
+                  mergedBlob = await mergeAudioSegments(validSegments);
+              } catch (e) {
+                  console.error("Merge failed for upload", e);
+              }
+          }
+      }
+
+      if (!mergedBlob) {
+          setMessage({ text: '没有可上传的音频数据', type: 'error' });
+          return;
+      }
+
+      setMessage({ text: `正在上传语料: ${group.index}...`, type: '' });
+
+      try {
+          // Unlock Script
+          await lockScript(token, activeScript.id);
+
+          const currentFullText = group.segments.map(s => s.text).join('');
+          const originalText = matchedCorpus.text; // Use matched corpus text as original reference
+          const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
+
+          const contentId = matchedCorpus.baizeData.id; // Use matched ID
+
+          // Upload Audio
+          const filename = `${group.index}.wav`;
+          const res = await uploadAudio(token, contentId, mergedBlob, filename);
+
+          if (res && res.code === "2000") {
+              if (isTextChanged && syncTextEnabled) {
+                  const corpusId = matchedCorpus.baizeData.corpusId;
+                  await updateScriptText(token, contentId, corpusId, activeScript.id, currentFullText);
+              }
+
+              // Mark as uploaded
+              setAudioGroups(prev => {
+                  const updated = [...prev];
+                  updated[groupIndex] = {
+                    ...updated[groupIndex],
+                    isUploaded: true,
+                    hasUploadedHistory: true, // Mark history
+                    baizeData: matchedCorpus.baizeData
+                  };
+                  return updated;
+              });
+
+              setMessage({ text: `上传成功: ${group.index}`, type: 'success' });
+          } else if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+              setMessage({ text: `上传失败: 语料被锁定`, type: 'error' });
+          } else {
+              setMessage({ text: `上传失败: ${res?.msg || '未知错误'}`, type: 'error' });
+          }
+
+      } catch (error) {
+          setMessage({ text: `上传出错: ${error.message}`, type: 'error' });
+      } finally {
+          // Lock Script
+          try {
+              await unlockScript(token, activeScript.id);
+          } catch (e) {
+              console.error("Lock failed", e);
+          }
+      }
+  }, [audioGroups, token, syncTextEnabled, mergeAudioSegments]);
+
+  // Single Group Upload Handler (UI Entry Point)
+  const handleSingleGroupUpload = useCallback(async (groupIndex) => {
     if (!token) {
         setMessage({ text: '请先登录', type: 'error' });
+        handleLoginOpen();
         return;
     }
 
-    // Validation against Target Script
-    if (!targetScript || !targetScript.id) {
-        handleLinkScript();
-        return;
-    }
+    // New Logic: Check if we need to confirm target script for single upload context
+    // This happens if:
+    // 1. No target script selected
+    // 2. Target script selected but "Single Upload" not yet confirmed in this session (or since last script change)
 
-    // Find matching corpus in target script
-    // Loose matching: by index name (exact match)
-    const matchedCorpus = targetScriptCorpusList.find(c => c.index === group.index);
-    if (!matchedCorpus) {
-        setMessage({ text: `无法上传: 当前语料名称 "${group.index}" 不在目标话术 "${targetScript.scriptName}" 中`, type: 'error' });
-        return;
-    }
+    if (!targetScript || !hasConfirmedSingleUploadScript) {
+        setSingleUploadGroupIndex(groupIndex);
+        setScriptDialogMode('single_upload');
+        if (targetScript) setSelectedScript(targetScript); // Pre-select
 
-    // Try to merge if valid segments exist
-    let mergedBlob = null;
-    if (mergedAudiosRef.current[groupIndex]) {
-        mergedBlob = mergedAudiosRef.current[groupIndex].blob;
-    } else {
-        const validSegments = group.segments.filter(seg => !seg.error);
-        if (validSegments.length > 0) {
-            try {
-                mergedBlob = await mergeAudioSegments(validSegments);
-            } catch (e) {
-                console.error("Merge failed for upload", e);
-            }
-        }
-    }
-
-    if (!mergedBlob) {
-        setMessage({ text: '没有可上传的音频数据', type: 'error' });
-        return;
-    }
-
-    setMessage({ text: `正在上传语料: ${group.index}...`, type: '' });
-
-    try {
-        // Unlock Script
-        await lockScript(token, targetScript.id);
-
-        const currentFullText = group.segments.map(s => s.text).join('');
-        const originalText = matchedCorpus.text; // Use matched corpus text as original reference
-        const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
-
-        console.log(`[Upload] Group: ${group.index}`);
-        console.log(`[Upload] Original: "${originalText}"`);
-        console.log(`[Upload] Current:  "${currentFullText}"`);
-        console.log(`[Upload] Changed?: ${isTextChanged}`);
-
-        const contentId = matchedCorpus.baizeData.id; // Use matched ID
-
-        // Upload Audio
-        const filename = `${group.index}.wav`;
-        const res = await uploadAudio(token, contentId, mergedBlob, filename);
-
-        if (res && res.code === "2000") {
-            if (isTextChanged && syncTextEnabled) {
-                const corpusId = matchedCorpus.baizeData.corpusId;
-                await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
-            }
-
-            // Mark as uploaded
-            setAudioGroups(prev => {
-                const updated = [...prev];
-                updated[groupIndex] = {
-                  ...updated[groupIndex],
-                  isUploaded: true,
-                  hasUploadedHistory: true, // Mark history
-                  baizeData: matchedCorpus.baizeData
-                };
-                return updated;
-            });
-
-            setMessage({ text: `上传成功: ${group.index}`, type: 'success' });
-        } else if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
-             setMessage({ text: `上传失败: 语料被锁定`, type: 'error' });
-        } else {
-             setMessage({ text: `上传失败: ${res?.msg || '未知错误'}`, type: 'error' });
-        }
-
-    } catch (error) {
-        setMessage({ text: `上传出错: ${error.message}`, type: 'error' });
-    } finally {
-        // Lock Script
+        // Open Dialog
+        setScriptSearch('');
+        setScriptDialogOpen(true);
+        setIsFetchingScripts(true);
         try {
-            await unlockScript(token, targetScript.id);
-        } catch (e) {
-            console.error("Lock failed", e);
+            const res = await fetchScripts(token);
+            if (res.code === "2000" && Array.isArray(res.data)) {
+              setScriptList(res.data);
+            } else {
+              // Fail silently or show error
+            }
+        } finally {
+            setIsFetchingScripts(false);
         }
+        return;
     }
-  }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments, syncTextEnabled, handleLinkScript]);
+
+    // If confirmed, proceed immediately using current targetScript and list
+    executeSingleUpload(groupIndex, targetScript, targetScriptCorpusList);
+
+  }, [token, targetScript, hasConfirmedSingleUploadScript, targetScriptCorpusList, executeSingleUpload]);
 
   const handleBatchUploadClick = async () => {
     if (!token) {
@@ -2055,6 +2097,14 @@ function TtsEditor() {
                         {scriptList.filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase())).length > 0 ? (
                             scriptList
                                 .filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase()))
+                                .sort((a, b) => {
+                                  // Sort selected script to top if exists
+                                  if (selectedScript) {
+                                      if (a.id === selectedScript.id) return -1;
+                                      if (b.id === selectedScript.id) return 1;
+                                  }
+                                  return 0; // Keep original order otherwise
+                                })
                                 .map((script) => (
                                 <Box key={script.id}>
                                     <ListItem disablePadding>
