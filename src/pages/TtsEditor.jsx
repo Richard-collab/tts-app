@@ -4,7 +4,7 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
-  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel, Switch
+  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel, Switch, Menu, IconButton
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -20,6 +20,9 @@ import ScienceIcon from '@mui/icons-material/Science';
 import HelpIcon from '@mui/icons-material/Help';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PersonIcon from '@mui/icons-material/Person';
+import KeyboardArrowLeftIcon from '@mui/icons-material/KeyboardArrowLeft';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -234,6 +237,8 @@ function TtsEditor() {
   const [isFetchingScripts, setIsFetchingScripts] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [anchorElUser, setAnchorElUser] = useState(null);
+  const [isProgressExpanded, setIsProgressExpanded] = useState(true);
 
   // Corpus Dialog State
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
@@ -1444,31 +1449,52 @@ function TtsEditor() {
               {/* Login Button (Absolute Position or in a specific place) */}
               <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 1000 }}>
                   {!user ? (
-                      <Button
-                        variant="contained"
+                      <Fab
                         color="primary"
-                        startIcon={<LoginIcon />}
+                        aria-label="login"
                         onClick={handleLoginOpen}
-                        sx={{ borderRadius: 20 }}
+                        size="medium"
                       >
-                          登录
-                      </Button>
+                          <LoginIcon />
+                      </Fab>
                   ) : (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, bgcolor: 'white', p: 1, borderRadius: 20, boxShadow: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', px: 1 }}>
-                              {user.account}
-                          </Typography>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            startIcon={<LogoutIcon />}
-                            onClick={handleLogout}
-                            sx={{ borderRadius: 20 }}
-                          >
-                              退出
-                          </Button>
-                      </Box>
+                      <>
+                        <Fab
+                            color="secondary"
+                            aria-label="user-menu"
+                            onClick={(e) => setAnchorElUser(e.currentTarget)}
+                            size="medium"
+                        >
+                            <PersonIcon />
+                        </Fab>
+                        <Menu
+                            sx={{ mt: '45px' }}
+                            id="menu-appbar"
+                            anchorEl={anchorElUser}
+                            anchorOrigin={{
+                                vertical: 'top',
+                                horizontal: 'right',
+                            }}
+                            keepMounted
+                            transformOrigin={{
+                                vertical: 'top',
+                                horizontal: 'right',
+                            }}
+                            open={Boolean(anchorElUser)}
+                            onClose={() => setAnchorElUser(null)}
+                        >
+                            <MenuItem disabled>
+                                <Typography textAlign="center">{user.account}</Typography>
+                            </MenuItem>
+                            <Divider />
+                            <MenuItem onClick={() => { handleLogout(); setAnchorElUser(null); }}>
+                                <ListItemIcon>
+                                    <LogoutIcon fontSize="small" />
+                                </ListItemIcon>
+                                <Typography textAlign="center">退出登录</Typography>
+                            </MenuItem>
+                        </Menu>
+                      </>
                   )}
               </Box>
 
@@ -1912,41 +1938,54 @@ function TtsEditor() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: 2,
-                        animation: 'slideInRight 0.5s ease-out'
+                        transition: 'all 0.3s ease',
                     }}
                 >
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mr: 1 }}>
-                        <Typography variant="body2" component="div" sx={{ fontWeight: 'bold' }}>
-                            目标话术：
-                            <Typography
-                                component="span"
-                                variant="body2"
-                                onClick={handleLinkScript}
-                                sx={{
-                                    color: '#0984e3',
-                                    cursor: 'pointer',
-                                    textDecoration: 'underline',
-                                    fontWeight: 'bold',
-                                    '&:hover': { color: '#74b9ff' }
-                                }}
-                            >
-                                {targetScript ? targetScript.scriptName : '未选择'}
-                            </Typography>
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                             <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                                文本同步
-                            </Typography>
-                            <Switch
-                                size="small"
-                                checked={syncTextEnabled}
-                                onChange={(e) => setSyncTextEnabled(e.target.checked)}
-                                inputProps={{ 'aria-label': 'sync text switch' }}
-                            />
-                        </Box>
-                    </Box>
+                    <IconButton
+                        onClick={() => setIsProgressExpanded(!isProgressExpanded)}
+                        size="small"
+                        aria-label="toggle progress bar"
+                        sx={{ mr: isProgressExpanded ? 1 : 0 }}
+                    >
+                        {isProgressExpanded ? <KeyboardArrowRightIcon /> : <KeyboardArrowLeftIcon />}
+                    </IconButton>
 
-                    <Divider orientation="vertical" flexItem sx={{ height: 40, alignSelf: 'center' }} />
+                    {isProgressExpanded && (
+                        <>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mr: 1, minWidth: 150 }}>
+                                <Typography variant="body2" component="div" sx={{ fontWeight: 'bold' }}>
+                                    目标话术：
+                                    <Typography
+                                        component="span"
+                                        variant="body2"
+                                        onClick={handleLinkScript}
+                                        sx={{
+                                            color: '#0984e3',
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline',
+                                            fontWeight: 'bold',
+                                            '&:hover': { color: '#74b9ff' }
+                                        }}
+                                    >
+                                        {targetScript ? targetScript.scriptName : '未选择'}
+                                    </Typography>
+                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                                        文本同步
+                                    </Typography>
+                                    <Switch
+                                        size="small"
+                                        checked={syncTextEnabled}
+                                        onChange={(e) => setSyncTextEnabled(e.target.checked)}
+                                        inputProps={{ 'aria-label': 'sync text switch' }}
+                                    />
+                                </Box>
+                            </Box>
+
+                            <Divider orientation="vertical" flexItem sx={{ height: 40, alignSelf: 'center' }} />
+                        </>
+                    )}
 
                     <Box sx={{ position: 'relative', display: 'inline-flex' }}>
                         <CircularProgress
