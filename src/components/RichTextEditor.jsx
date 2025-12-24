@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } f
 import { Popover, Box, TextField, Button } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 
-const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, ref) => {
+const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, onAutoSave }, ref) => {
   const editorRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [editingPill, setEditingPill] = useState(null);
@@ -52,19 +52,14 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, 
             const ms = Math.round(duration * 1000);
             text += `<break time="${ms}ms"/>`;
           } else {
-            // Fallback or keep as is? User said "return" (do nothing) if no match.
-            // Ideally we should preserve it or use a default.
-            // Let's default to MinMax format if unknown, or just text representation to avoid data loss.
-            // Using MinMax style as generic fallback for now.
-            text += `<#${duration.toFixed(1)}#>`;
+             // Fallback default
+             text += `<#${duration.toFixed(1)}#>`;
           }
         } else if (node.tagName === 'BR') {
           text += '\n';
         } else if (node.tagName === 'DIV') {
-            // ContentEditable often wraps lines in divs
             if (text.length > 0 && !text.endsWith('\n')) text += '\n';
             node.childNodes.forEach(traverse);
-            // Div end often implies newline
         } else {
           node.childNodes.forEach(traverse);
         }
@@ -77,26 +72,33 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, 
 
   // --- Effects ---
 
-  // Sync value prop to innerHTML on mount or if value changes significantly
+  // Effect 1: Sync Value -> InnerHTML
+  // Only update if the semantic text content has changed from parent
   useEffect(() => {
     if (editorRef.current) {
-        // Compare current text content to avoid cursor jumping?
-        // Actually, converting HTML to text and comparing with `value` is better.
-        // But for simplicity, we only set innerHTML if the serialized version is different
-        // OR if the editor is empty (init).
         const currentText = htmlToText(editorRef.current);
         if (value !== currentText) {
-             // Only update if they differ to avoid cursor reset on every keystroke if parent updates back
-             // However, `value` usually comes from parent state which we updated.
-             // If we are strictly controlled, we might need to be careful.
-             // For now, let's just initialize.
              const newHtml = textToHtml(value);
              if (editorRef.current.innerHTML !== newHtml) {
                  editorRef.current.innerHTML = newHtml;
              }
         }
     }
-  }, [value, voice]); // Voice change might re-format tags? No, textToHtml parses tags. Tags in text don't change until saved.
+  }, [value]);
+
+  // Effect 2: Sync Voice Change -> Upwards
+  // When voice changes, re-serialize current HTML to new format and notify parent
+  useEffect(() => {
+    if (editorRef.current) {
+        // htmlToText uses the current 'voice' prop (which triggered this effect)
+        const newText = htmlToText(editorRef.current);
+        // If re-serialization changed the text (e.g. <#1.0#> -> <break...>)
+        if (newText !== value) {
+            if (onChange) onChange(newText);
+            if (onAutoSave) onAutoSave(newText);
+        }
+    }
+  }, [voice]);
 
   // Save selection
   const saveSelection = () => {
@@ -143,9 +145,6 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, 
   };
 
   const handleBlur = (e) => {
-      // Logic: if blur is caused by clicking "Insert Pause" button (which is outside),
-      // we might want to keep "focused" state visually in parent?
-      // Parent handles that via onFocus/onBlur.
       if (onBlur) onBlur(e);
   };
 
@@ -163,7 +162,6 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, 
       } else {
         // If no selection, append to end
         editorRef.current.focus();
-        // Move caret to end
         const range = document.createRange();
         range.selectNodeContents(editorRef.current);
         range.collapse(false);
@@ -172,22 +170,10 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, 
         sel.addRange(range);
       }
 
-      // Check voice
-      if (!voice || (!voice.includes('MinMax') && !voice.includes('阿里'))) {
-          // If voice not supported, maybe just insert default?
-          // User logic had "return". But let's insert a default 1s for better UX if voice is missing/loading.
-          // Or strictly follow user logic:
-          // return;
-          // Let's assume valid voice for now or default.
-      }
-
       const duration = 1.0;
       const pillHtml = `<span class="pause-pill" contenteditable="false" data-duration="${duration.toFixed(1)}">|| ${duration.toFixed(1)}s</span>`;
 
-      // Insert HTML
       document.execCommand('insertHTML', false, pillHtml);
-
-      // Trigger change
       handleInput();
     }
   }));
@@ -208,7 +194,6 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice }, 
       editingPill.setAttribute('data-duration', duration.toFixed(1));
       editingPill.textContent = `|| ${duration.toFixed(1)}s`;
 
-      // Trigger change
       handleInput();
       handlePopoverClose();
     }

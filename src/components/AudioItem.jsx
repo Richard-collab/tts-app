@@ -177,6 +177,7 @@ function AudioItem({
             value={text}
             voice={voice}
             onChange={(newText) => setText(newText)}
+            onAutoSave={(newText) => onUpdate({ text: newText })}
             onFocus={() => setIsEditorFocused(true)}
             onBlur={() => {
               setIsEditorFocused(false);
