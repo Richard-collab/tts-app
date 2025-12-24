@@ -7,12 +7,14 @@ import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import ErrorIcon from '@mui/icons-material/Error';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import WaveformEditor from './WaveformEditor';
+import RichTextEditor from './RichTextEditor';
 
 function AudioItem({
   segment,
   segmentIndex,
-  // voice, // Unused
+  voice,
   isCurrentlyPlaying,
   onDelete,
   onUpdate,
@@ -22,8 +24,9 @@ function AudioItem({
   const [text, setText] = useState(segment.text);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [isEditorFocused, setIsEditorFocused] = useState(false);
   const audioRef = useRef(null);
-  const textAreaRef = useRef(null);
+  const richTextEditorRef = useRef(null);
 
   useEffect(() => {
     setText(segment.text);
@@ -115,6 +118,26 @@ function AudioItem({
                 </Button>
               </Tooltip>
             )}
+            {/* Insert Pause Button */}
+            <Button
+              size="small"
+              variant="contained"
+              color={isEditorFocused ? "warning" : "inherit"}
+              disabled={!isEditorFocused || !(voice && (voice.includes('MinMax') || voice.includes('阿里')))}
+              startIcon={<PauseCircleIcon />}
+              onMouseDown={(e) => e.preventDefault()} // Prevent focus loss
+              onClick={() => {
+                if (richTextEditorRef.current) {
+                  richTextEditorRef.current.insertPause();
+                }
+              }}
+              sx={{
+                bgcolor: isEditorFocused ? undefined : 'rgba(0,0,0,0.12)',
+                color: isEditorFocused ? undefined : 'rgba(0,0,0,0.26)'
+              }}
+            >
+              插入停顿
+            </Button>
             {/* Delete Button */}
             <Button
               size="small"
@@ -149,17 +172,16 @@ function AudioItem({
             borderRadius: '0 6px 6px 0'
           }}
         >
-          <TextField
-            inputRef={textAreaRef}
-            multiline
-            fullWidth
+          <RichTextEditor
+            ref={richTextEditorRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            onBlur={() => onUpdate({ text: text })}
-            variant="standard"
-            InputProps={{
-              disableUnderline: true,
-              sx: { fontSize: '0.9rem' }
+            voice={voice}
+            onChange={(newText) => setText(newText)}
+            onAutoSave={(newText) => onUpdate({ text: newText })}
+            onFocus={() => setIsEditorFocused(true)}
+            onBlur={() => {
+              setIsEditorFocused(false);
+              onUpdate({ text: text });
             }}
           />
         </Box>
