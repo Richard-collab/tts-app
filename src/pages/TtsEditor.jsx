@@ -4,7 +4,7 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
-  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel
+  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel, Switch
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -1805,12 +1805,17 @@ function TtsEditor() {
                                 {targetScript ? targetScript.scriptName : '未选择'}
                             </Typography>
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            文本同步：
-                            <Box component="span" sx={{ color: syncTextEnabled ? 'success.main' : 'text.disabled', fontWeight: 'bold' }}>
-                                {syncTextEnabled ? '开启' : '关闭'}
-                            </Box>
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                                文本同步
+                            </Typography>
+                            <Switch
+                                size="small"
+                                checked={syncTextEnabled}
+                                onChange={(e) => setSyncTextEnabled(e.target.checked)}
+                                inputProps={{ 'aria-label': 'sync text switch' }}
+                            />
+                        </Box>
                     </Box>
 
                     <Divider orientation="vertical" flexItem sx={{ height: 40, alignSelf: 'center' }} />
