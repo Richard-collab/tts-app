@@ -231,7 +231,7 @@ function AudioGroup({
           <Button
             size="small"
             variant="contained"
-            color="warning"
+            color="error"
             startIcon={<DeleteIcon />}
             onClick={() => {
               if (window.confirm(`确定要删除语料"${group.index}"的所有音频片段吗？`)) {
@@ -253,7 +253,7 @@ function AudioGroup({
           <Button
             size="small"
             variant="contained"
-            color="secondary"
+            color="primary"
             startIcon={<DownloadIcon />}
             onClick={handleDownloadGroup}
             disabled={!hasValidSegments || isDownloading}
