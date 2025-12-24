@@ -25,7 +25,8 @@ function AudioGroup({
   onUpdateGroupName,
   mergeAudioSegments,
   mergedAudiosRef,
-  setMessage
+  setMessage,
+  isGlobalUploading
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -222,11 +223,11 @@ function AudioGroup({
               size="small"
               variant={group.isUploaded ? "outlined" : "contained"}
               color="success"
-              startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
+              startIcon={(isUploading || isGlobalUploading) ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
               onClick={handleUpload}
-              disabled={isUploading || !hasValidSegments}
+              disabled={isUploading || isGlobalUploading || !hasValidSegments}
           >
-              {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : (group.hasUploadedHistory ? '再次上传' : '上传音频'))}
+              {(isUploading || isGlobalUploading) ? '上传中...' : (group.isUploaded ? '已上传' : (group.hasUploadedHistory ? '再次上传' : '上传音频'))}
           </Button>
           <Button
             size="small"

@@ -260,6 +260,7 @@ function TtsEditor() {
   // New State for Single Upload Workflow
   const [singleUploadGroupIndex, setSingleUploadGroupIndex] = useState(null);
   const [hasConfirmedSingleUploadScript, setHasConfirmedSingleUploadScript] = useState(false);
+  const [uploadingGroupIndices, setUploadingGroupIndices] = useState(new Set());
 
   // Result Dialog State
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -505,6 +506,15 @@ function TtsEditor() {
               }
           } catch (e) {
               console.error("Single upload preparation failed", e);
+              // Cleanup on error
+              if (singleUploadGroupIndex !== null) {
+                   setUploadingGroupIndices(prev => {
+                      const newSet = new Set(prev);
+                      newSet.delete(singleUploadGroupIndex);
+                      return newSet;
+                  });
+                  setSingleUploadGroupIndex(null);
+              }
           }
       }
   };
@@ -536,12 +546,24 @@ function TtsEditor() {
   // Core Logic for Single Upload (Extracted)
   const executeSingleUpload = useCallback(async (groupIndex, activeScript, activeCorpusList) => {
       const group = audioGroups[groupIndex];
-      if (!group) return;
+      if (!group) {
+          setUploadingGroupIndices(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(groupIndex);
+              return newSet;
+          });
+          return;
+      }
 
       // Find matching corpus in target script
       const matchedCorpus = activeCorpusList.find(c => c.index === group.index);
       if (!matchedCorpus) {
           setMessage({ text: `无法上传: 当前语料名称 "${group.index}" 不在目标话术 "${activeScript.scriptName}" 中`, type: 'error' });
+          setUploadingGroupIndices(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(groupIndex);
+              return newSet;
+          });
           return;
       }
 
@@ -562,6 +584,11 @@ function TtsEditor() {
 
       if (!mergedBlob) {
           setMessage({ text: '没有可上传的音频数据', type: 'error' });
+          setUploadingGroupIndices(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(groupIndex);
+              return newSet;
+          });
           return;
       }
 
@@ -609,6 +636,13 @@ function TtsEditor() {
       } catch (error) {
           setMessage({ text: `上传出错: ${error.message}`, type: 'error' });
       } finally {
+          // Remove from uploading set
+          setUploadingGroupIndices(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(groupIndex);
+              return newSet;
+          });
+
           // Lock Script
           try {
               await unlockScript(token, activeScript.id);
@@ -625,6 +659,9 @@ function TtsEditor() {
         handleLoginOpen();
         return;
     }
+
+    // Mark as uploading immediately
+    setUploadingGroupIndices(prev => new Set(prev).add(groupIndex));
 
     // New Logic: Check if we need to confirm target script for single upload context
     // This happens if:
@@ -647,6 +684,13 @@ function TtsEditor() {
             } else {
               // Fail silently or show error
             }
+        } catch {
+            // If fetch fails, we need to clear the uploading state because the dialog might not open or work
+             setUploadingGroupIndices(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(groupIndex);
+                return newSet;
+            });
         } finally {
             setIsFetchingScripts(false);
         }
@@ -1802,6 +1846,7 @@ function TtsEditor() {
                       mergeAudioSegments={mergeAudioSegments}
                       mergedAudiosRef={mergedAudiosRef}
                       setMessage={setMessage}
+                      isGlobalUploading={uploadingGroupIndices.has(groupIndex)}
                     />
                   ))}
                 </Box>
@@ -2066,7 +2111,23 @@ function TtsEditor() {
           </Dialog>
 
           {/* Script Selection Dialog */}
-          <Dialog open={scriptDialogOpen} onClose={() => setScriptDialogOpen(false)} maxWidth="sm" fullWidth>
+          <Dialog
+            open={scriptDialogOpen}
+            onClose={() => {
+                setScriptDialogOpen(false);
+                // Clean up uploading state if cancelled during single upload flow
+                if (scriptDialogMode === 'single_upload' && singleUploadGroupIndex !== null) {
+                    setUploadingGroupIndices(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(singleUploadGroupIndex);
+                        return newSet;
+                    });
+                    setSingleUploadGroupIndex(null);
+                }
+            }}
+            maxWidth="sm"
+            fullWidth
+          >
             <DialogTitle>选择话术导入</DialogTitle>
             <DialogContent>
                 <Box sx={{ mb: 2, mt: 1 }}>
