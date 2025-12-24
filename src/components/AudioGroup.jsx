@@ -226,7 +226,7 @@ function AudioGroup({
               onClick={handleUpload}
               disabled={isUploading || !hasValidSegments}
           >
-              {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : '上传音频')}
+              {isUploading ? '上传中...' : (group.isUploaded ? '已上传' : (group.hasUploadedHistory ? '再次上传' : '上传音频'))}
           </Button>
           <Button
             size="small"

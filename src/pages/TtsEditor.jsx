@@ -252,7 +252,9 @@ function TtsEditor() {
   // Validation State (Target Script)
   const [targetScript, setTargetScript] = useState(null);
   const [targetScriptCorpusList, setTargetScriptCorpusList] = useState([]);
-  const [isLinkingScript, setIsLinkingScript] = useState(false); // Mode flag
+  // const [isLinkingScript, setIsLinkingScript] = useState(false); // Deprecated: Mode flag
+  const [scriptDialogMode, setScriptDialogMode] = useState(''); // 'import' | 'link' | 'batch_upload'
+  const [selectedScript, setSelectedScript] = useState(null);
   const [syncTextEnabled, setSyncTextEnabled] = useState(true);
 
   // Result Dialog State
@@ -287,7 +289,10 @@ function TtsEditor() {
           handleLoginOpen();
           return;
       }
-      setIsLinkingScript(true);
+      // setIsLinkingScript(true); // Replaced by mode
+      setScriptDialogMode('link');
+      if (targetScript) setSelectedScript(targetScript); // Pre-select if exists
+
       setScriptSearch('');
       setScriptDialogOpen(true);
       setIsFetchingScripts(true);
@@ -300,7 +305,7 @@ function TtsEditor() {
       }).finally(() => {
           setIsFetchingScripts(false);
       });
-  }, [token]);
+  }, [token, targetScript]);
 
   // Merge audio segments (Moved UP to be accessible by handleSingleGroupUpload)
   const mergeAudioSegments = useCallback(async (audioSegments) => {
@@ -370,6 +375,10 @@ function TtsEditor() {
           handleLoginOpen();
           return;
       }
+
+      setScriptDialogMode('import');
+      if (targetScript) setSelectedScript(targetScript); // Optional: pre-select current if want to re-import
+
       setScriptSearch('');
       setScriptDialogOpen(true);
       setIsFetchingScripts(true);
@@ -387,8 +396,8 @@ function TtsEditor() {
       }
   };
 
-  const handleScriptSelect = async (script) => {
-      setScriptDialogOpen(false);
+  // Helper logic extracted from old handleScriptSelect, now used by Confirm
+  const executeScriptSelectionAction = async (script, mode) => {
       setMessage({ text: `正在获取话术语料: ${script.scriptName}...`, type: '' });
 
       try {
@@ -413,12 +422,17 @@ function TtsEditor() {
                   uniqueId: item.id || idx // Use ID if available, else index
               }));
 
-              if (isLinkingScript) {
+              if (mode === 'link' || mode === 'batch_upload') {
                   // Only set target script for validation context
                   setTargetScript(script);
                   setTargetScriptCorpusList(preparedData);
-                  setMessage({ text: `已关联目标话术: ${script.scriptName}`, type: 'success' });
-                  setIsLinkingScript(false);
+
+                  if (mode === 'link') {
+                     setMessage({ text: `已关联目标话术: ${script.scriptName}`, type: 'success' });
+                  } else {
+                     // batch_upload logic continues in its own flow
+                  }
+                  return preparedData; // Return for further use
               } else {
                   // Standard Import flow
                   setCorpusList(preparedData);
@@ -438,13 +452,41 @@ function TtsEditor() {
                   setSelectedCorpusIndices(new Set());
                   setCorpusDialogOpen(true);
                   setMessage({ text: '', type: '' });
+                  return preparedData;
               }
           } else {
               throw new Error("话术语料为空或格式不正确");
           }
       } catch (error) {
           setMessage({ text: `获取话术语料失败: ${error.message}`, type: 'error' });
-          setIsLinkingScript(false);
+          // setIsLinkingScript(false);
+          throw error;
+      }
+  };
+
+  const handleScriptSelect = (script) => {
+      setSelectedScript(script);
+  };
+
+  const handleScriptDialogConfirm = async () => {
+      if (!selectedScript) {
+          setMessage({ text: '请选择一个话术', type: 'error' });
+          return;
+      }
+      setScriptDialogOpen(false);
+
+      if (scriptDialogMode === 'import' || scriptDialogMode === 'link') {
+          await executeScriptSelectionAction(selectedScript, scriptDialogMode);
+      } else if (scriptDialogMode === 'batch_upload') {
+          try {
+             // 1. Update/Link script first
+             const corpusList = await executeScriptSelectionAction(selectedScript, 'batch_upload');
+             // 2. Trigger Upload (need to pass data since state update might lag slightly if we relied on targetScript immediately)
+             // We can use selectedScript and corpusList explicitly
+             executeBatchUpload(selectedScript, corpusList);
+          } catch (e) {
+             console.error("Batch upload preparation failed", e);
+          }
       }
   };
 
@@ -546,7 +588,12 @@ function TtsEditor() {
             // Mark as uploaded
             setAudioGroups(prev => {
                 const updated = [...prev];
-                updated[groupIndex] = { ...updated[groupIndex], isUploaded: true, baizeData: matchedCorpus.baizeData };
+                updated[groupIndex] = {
+                  ...updated[groupIndex],
+                  isUploaded: true,
+                  hasUploadedHistory: true, // Mark history
+                  baizeData: matchedCorpus.baizeData
+                };
                 return updated;
             });
 
@@ -569,14 +616,10 @@ function TtsEditor() {
     }
   }, [audioGroups, token, targetScript, targetScriptCorpusList, mergeAudioSegments, syncTextEnabled, handleLinkScript]);
 
-  // Baize Upload Handler
-  const handleBaizeUpload = async () => {
-    let successCount = 0;
-    let failCount = 0;
-    let lockedErrorOccurred = false;
-
+  const handleBatchUploadClick = async () => {
     if (!token) {
         setMessage({ text: '请先登录', type: 'error' });
+        handleLoginOpen();
         return;
     }
     if (audioGroups.length === 0) {
@@ -584,21 +627,42 @@ function TtsEditor() {
         return;
     }
 
-    // Validation
-    if (!targetScript || !targetScript.id) {
-        handleLinkScript();
-        return;
-    }
+    setScriptDialogMode('batch_upload');
+    if (targetScript) setSelectedScript(targetScript); // Pre-select current target script
 
-    // Identify valid groups to upload (those that exist in target script)
+    // Always open dialog
+    setScriptSearch('');
+    setScriptDialogOpen(true);
+    setIsFetchingScripts(true);
+    try {
+        const res = await fetchScripts(token);
+        if (res.code === "2000" && Array.isArray(res.data)) {
+          setScriptList(res.data);
+        } else {
+          throw new Error(res.msg || "获取话术列表失败");
+        }
+    } catch (error) {
+        setMessage({ text: `获取话术列表失败: ${error.message}`, type: 'error' });
+    } finally {
+        setIsFetchingScripts(false);
+    }
+  };
+
+  // Core Batch Upload Logic (separated from UI handler)
+  const executeBatchUpload = async (activeScript, activeCorpusList) => {
+    let successCount = 0;
+    let failCount = 0;
+    let lockedErrorOccurred = false;
+
     const groupsToUpload = [];
     const skippedGroups = [];
 
+    // Use passed corpus list for validation
     for (let i = 0; i < audioGroups.length; i++) {
         const group = audioGroups[i];
         if (group.checked === false) continue;
 
-        const matchedCorpus = targetScriptCorpusList.find(c => c.index === group.index);
+        const matchedCorpus = activeCorpusList.find(c => c.index === group.index);
         if (matchedCorpus) {
             groupsToUpload.push({ group, index: i, matchedCorpus });
         } else {
@@ -616,7 +680,7 @@ function TtsEditor() {
             return;
         }
     } else {
-         if (!window.confirm(`确定要将 ${groupsToUpload.length} 个语料上传到系统吗？这将覆盖系统中的原有音频。`)) {
+         if (!window.confirm(`确定要将 ${groupsToUpload.length} 个语料上传到系统 (ID: ${activeScript.id}) 吗？这将覆盖系统中的原有音频。`)) {
             return;
         }
     }
@@ -624,9 +688,8 @@ function TtsEditor() {
     setIsUploading(true);
     setMessage({ text: '正在解锁话术...', type: '' });
 
-    // lock Script
     try {
-        await lockScript(token, targetScript.id);
+        await lockScript(token, activeScript.id);
     } catch (error) {
         setMessage({ text: `解锁话术失败: ${error.message}`, type: 'error' });
         setIsUploading(false);
@@ -638,13 +701,10 @@ function TtsEditor() {
     try {
         for (const item of groupsToUpload) {
             const { group, index: i, matchedCorpus } = item;
-
-            // Generate/Get merged audio for this group
             let mergedBlob = null;
             if (mergedAudiosRef.current[i]) {
                 mergedBlob = mergedAudiosRef.current[i].blob;
             } else {
-                // Try to merge if valid segments exist
                 const validSegments = group.segments.filter(seg => !seg.error);
                 if (validSegments.length > 0) {
                     try {
@@ -660,39 +720,33 @@ function TtsEditor() {
                 continue;
             }
 
-            // Check text change
             const currentFullText = group.segments.map(s => s.text).join('');
             const originalText = matchedCorpus.text;
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
-            console.log(`[BatchUpload] Group: ${group.index}`);
-            console.log(`[BatchUpload] Original: "${originalText}"`);
-            console.log(`[BatchUpload] Current:  "${currentFullText}"`);
-            console.log(`[BatchUpload] Changed?: ${isTextChanged}`);
-
-            // Upload to the single ID for this group
             const contentId = matchedCorpus.baizeData.id;
             try {
-                // Upload Audio
                 const filename = `${group.index}.wav`;
                 const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
-                // Check for locked message in response
                 if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
                     lockedErrorOccurred = true;
                     failCount++;
                 } else if (res && res.code === "2000") {
-                        // Update Text if changed
                     if (isTextChanged && syncTextEnabled) {
                         const corpusId = matchedCorpus.baizeData.corpusId;
-                        await updateScriptText(token, contentId, corpusId, targetScript.id, currentFullText);
+                        await updateScriptText(token, contentId, corpusId, activeScript.id, currentFullText);
                     }
 
-                    // Mark as uploaded in local state
                     setAudioGroups(prev => {
                         return prev.map((item, idx) => {
                             if (idx === i) {
-                                return { ...item, isUploaded: true, baizeData: matchedCorpus.baizeData };
+                                return {
+                                  ...item,
+                                  isUploaded: true,
+                                  hasUploadedHistory: true,
+                                  baizeData: matchedCorpus.baizeData
+                                };
                             }
                             return item;
                         });
@@ -700,12 +754,10 @@ function TtsEditor() {
 
                     successCount++;
                 } else {
-                    // Unexpected code
                     throw new Error(res.msg || "上传失败");
                 }
             } catch (e) {
                 console.error(`Failed to upload for contentId ${contentId}`, e);
-                // Check for locked message in error object if available
                 if (e.message && e.message.includes('锁定')) {
                     lockedErrorOccurred = true;
                 }
@@ -726,9 +778,8 @@ function TtsEditor() {
     } catch (error) {
         setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
     } finally {
-        // unLock Script
         try {
-             await unlockScript(token, targetScript.id);
+             await unlockScript(token, activeScript.id);
         } catch (lockError) {
              console.error("Failed to lock script", lockError);
              const isError = failCount > 0 || lockedErrorOccurred;
@@ -1141,6 +1192,11 @@ function TtsEditor() {
           };
         }
 
+        // Reset uploaded status if content changed (but keep history)
+        if (Object.hasOwn(newData, 'text') || Object.hasOwn(newData, 'blob')) {
+             updated[groupIndex].isUploaded = false;
+        }
+
         if (hasNewUrl && mergedAudiosRef.current[groupIndex]) {
           delete mergedAudiosRef.current[groupIndex];
         }
@@ -1265,7 +1321,8 @@ function TtsEditor() {
             text: '测试用语料（自动生成）',
             originalData: { isPlay: false }
         },
-        isUploaded: false
+        isUploaded: false,
+        hasUploadedHistory: false
       };
 
       setAudioGroups(prev => [newGroup, ...prev]);
@@ -1415,26 +1472,6 @@ function TtsEditor() {
                 >
                   输入文本或上传Excel文件，每行文本可按句号、问号分割成独立的音频片段，打包导出时会自动合并为完整音频
                 </Typography>
-
-                {/* Target Script Display */}
-                 <Box sx={{ mb: 3, p: 2, bgcolor: '#f0f4f8', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                        <Typography variant="subtitle2" color="text.secondary">
-                            目标话术 (用于上传验证)
-                        </Typography>
-                        <Typography variant="h6" color={targetScript ? 'primary' : 'text.disabled'}>
-                            {targetScript ? targetScript.scriptName : '未选择话术'}
-                            {targetScript && <Typography component="span" variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>ID: {targetScript.id}</Typography>}
-                        </Typography>
-                    </Box>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={handleLinkScript}
-                    >
-                        {targetScript ? '切换话术' : '关联白泽话术'}
-                    </Button>
-                </Box>
 
                 {/* Controls Grid */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1657,11 +1694,11 @@ function TtsEditor() {
                             variant="contained"
                             color="success"
                             startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
-                            onClick={handleBaizeUpload}
+                            onClick={handleBatchUploadClick}
                             disabled={isUploading}
                              sx={{ borderRadius: '8px', py: 1 }}
                         >
-                            {isUploading ? '正在上传...' : '上传到白泽'}
+                            {isUploading ? '正在上传...' : '批量上传到白泽'}
                         </Button>
                      </Grid>
                   </Grid>
@@ -2021,7 +2058,10 @@ function TtsEditor() {
                                 .map((script) => (
                                 <Box key={script.id}>
                                     <ListItem disablePadding>
-                                        <ListItemButton onClick={() => handleScriptSelect(script)}>
+                                        <ListItemButton
+                                          onClick={() => handleScriptSelect(script)}
+                                          selected={selectedScript && selectedScript.id === script.id}
+                                        >
                                             <ListItemText
                                                 primary={script.scriptName}
                                                 secondary={`ID: ${script.id} | Industry: ${script.primaryIndustry}`}
@@ -2041,6 +2081,9 @@ function TtsEditor() {
             </DialogContent>
             <DialogActions>
                 <Button onClick={() => setScriptDialogOpen(false)}>取消</Button>
+                <Button onClick={handleScriptDialogConfirm} variant="contained" disabled={!selectedScript}>
+                  确定
+                </Button>
             </DialogActions>
           </Dialog>
 
