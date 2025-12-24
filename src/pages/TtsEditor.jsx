@@ -1338,15 +1338,6 @@ function TtsEditor() {
                     maxHeight: 400, // 👈 关键
                     maxWidth: 350,
                     overflowY: 'auto',
-                    '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '4px',
-                    background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
-                  }
                   }}
                 >
                   <Typography variant="h6" gutterBottom>
@@ -1370,21 +1361,12 @@ function TtsEditor() {
 
             {/* <Grid item xs={12} md={7} display="flex" justifyContent="center"> */}
               <Paper 
-                elevation={3} 
+                elevation={0}
                 sx={{ 
                   p: 3, 
                   borderRadius: 4,
                   // position: 'relative',
                   overflow: 'hidden',
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '4px',
-                    background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
-                  }
                 }}
               >
                 <Typography 
@@ -1392,17 +1374,8 @@ function TtsEditor() {
                   component="h1" 
                   align="center" 
                   sx={{ 
-                    mb: 1, 
+                    mb: 3,
                     fontWeight: 700,
-                    '&::after': {
-                      content: '""',
-                      display: 'block',
-                      width: '60px',
-                      height: '3px',
-                      background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
-                      margin: '12px auto',
-                      borderRadius: '2px'
-                    }
                   }}
                 >
                   语音合成
@@ -1509,17 +1482,18 @@ function TtsEditor() {
                   {tabValue === 0 && (
                      <Box sx={{
                       p: 3,
-                      bgcolor: 'rgba(108, 92, 231, 0.03)',
+                      bgcolor: 'background.default',
                       borderRadius: 2,
                       border: '1px dashed',
-                      borderColor: 'primary.light'
+                      borderColor: 'divider'
                     }}>
                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         从白泽系统导入话术语料作为编辑器初始内容。
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                           <Button
-                              variant="contained"
+                              variant="outlined"
+                              color="primary"
                               startIcon={<CloudDownloadIcon />}
                               onClick={handleOpenScriptDialog}
                               sx={{ px: 4 }}
@@ -1533,10 +1507,10 @@ function TtsEditor() {
                   {tabValue === 1 && (
                     <Box sx={{ 
                       p: 3, 
-                      bgcolor: 'rgba(108, 92, 231, 0.03)', 
+                      bgcolor: 'background.default',
                       borderRadius: 2,
                       border: '1px dashed',
-                      borderColor: 'primary.light'
+                      borderColor: 'divider'
                     }}>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                         请上传包含"语料名称"、"文字内容"列的Excel文件，支持xlsx格式
@@ -1544,7 +1518,8 @@ function TtsEditor() {
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                           <Button
-                            variant="contained"
+                            variant="outlined"
+                            color="primary"
                             startIcon={<ContentPasteIcon />}
                             onClick={handleOpenPasteDialog}
                             sx={{ whiteSpace: 'nowrap' }}
@@ -1552,7 +1527,8 @@ function TtsEditor() {
                             从剪贴板粘贴
                           </Button>
                           <Button
-                            variant="contained"
+                            variant="outlined"
+                            color="primary"
                             component="label"
                             startIcon={<UploadFileIcon />}
                             sx={{ whiteSpace: 'nowrap' }}
@@ -1584,10 +1560,10 @@ function TtsEditor() {
                   {tabValue === 2 && (
                     <Box sx={{ 
                       p: 3, 
-                      bgcolor: 'rgba(108, 92, 231, 0.03)', 
+                      bgcolor: 'background.default',
                       borderRadius: 2,
                       border: '1px dashed',
-                      borderColor: 'primary.light'
+                      borderColor: 'divider'
                     }}>
                       <TextField
                         multiline
@@ -1607,16 +1583,15 @@ function TtsEditor() {
                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                      <Button
                       variant="contained"
-                      size="medium"
+                      color="primary"
+                      size="large"
                       startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <BoltIcon />}
                       onClick={handleSynthesize}
                       disabled={isGenerating}
                       className={!isGenerating ? 'pulse-animation' : ''}
                       sx={{
-                        borderRadius: '8px',
                         fontWeight: 'bold',
-                        boxShadow: '0 4px 14px 0 rgba(108, 92, 231, 0.39)',
-                        background: 'linear-gradient(45deg, #6C5CE7 30%, #a29bfe 90%)',
+                        minWidth: '200px'
                       }}
                     >
                       {isGenerating ? '生成中...' : '开始逐个合成音频'}
@@ -1628,12 +1603,12 @@ function TtsEditor() {
                      <Grid size={4}>
                         <Button
                             fullWidth
-                            variant="contained"
-                            color="secondary"
+                            variant="outlined"
+                            color="primary"
                             startIcon={isDownloading ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
                             onClick={handleDownloadAll}
                             disabled={audioGroups.length === 0 || isDownloading}
-                            sx={{ borderRadius: '8px', py: 1 }}
+                            sx={{ py: 1.5 }}
                         >
                             {isDownloading ? '打包中...' : '打包导出所有音频'}
                         </Button>
@@ -1641,12 +1616,12 @@ function TtsEditor() {
                      <Grid size={4}>
                          <Button
                             fullWidth
-                            variant="contained"
-                            color="info" // Using info or secondary for visual distinction
+                            variant="outlined"
+                            color="primary"
                             startIcon={<DescriptionIcon />}
                             onClick={handleExportExcel}
                             disabled={audioGroups.length === 0 || isGenerating}
-                             sx={{ borderRadius: '8px', py: 1 }}
+                             sx={{ py: 1.5 }}
                          >
                              导出Excel文件
                          </Button>
@@ -1655,11 +1630,11 @@ function TtsEditor() {
                          <Button
                             fullWidth
                             variant="contained"
-                            color="success"
+                            color="primary"
                             startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
                             onClick={handleBaizeUpload}
                             disabled={isUploading}
-                             sx={{ borderRadius: '8px', py: 1 }}
+                             sx={{ py: 1.5 }}
                         >
                             {isUploading ? '正在上传...' : '上传到白泽'}
                         </Button>
@@ -1731,7 +1706,7 @@ function TtsEditor() {
 
              {/* Help FAB */}
              <Fab
-                color="info"
+                color="secondary"
                 aria-label="help"
                 onClick={() => setHelpDialogOpen(true)}
                 sx={{
@@ -1739,13 +1714,7 @@ function TtsEditor() {
                     bottom: showProgress ? 300 : 200,
                     right: 40,
                     zIndex: 1000,
-                    boxShadow: '0 8px 16px rgba(9, 132, 227, 0.4)',
                     transition: 'bottom 0.3s ease',
-                    background: 'linear-gradient(45deg, #0984e3, #74b9ff)',
-                    '&:hover': {
-                        transform: 'scale(1.1)',
-                        boxShadow: '0 12px 20px rgba(9, 132, 227, 0.5)'
-                    }
                 }}
              >
                 <HelpIcon />
@@ -1761,13 +1730,7 @@ function TtsEditor() {
                     bottom: showProgress ? 220 : 120,
                     right: 40,
                     zIndex: 1000,
-                    boxShadow: '0 8px 16px rgba(108, 92, 231, 0.4)',
                     transition: 'bottom 0.3s ease',
-                    background: 'linear-gradient(45deg, #6C5CE7, #a29bfe)',
-                    '&:hover': {
-                        transform: 'scale(1.1)',
-                        boxShadow: '0 12px 20px rgba(108, 92, 231, 0.5)'
-                    }
                 }}
              >
                 <ScienceIcon />
@@ -1869,16 +1832,7 @@ function TtsEditor() {
                     maxHeight: 500, // 👈 关键
                     maxWidth: 350,
                     overflowY: 'auto',
-                    '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '4px',
-                    background: 'linear-gradient(90deg, #6C5CE7, #00CEC9)',
                   }}
-                  }
                 >
                   <Typography variant="h6" gutterBottom>
                     运用文字：

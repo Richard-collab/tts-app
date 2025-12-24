@@ -173,15 +173,13 @@ function AudioGroup({
       sx={{
         p: 2,
         mb: 2,
-        bgcolor: '#F8F9FA',
+        bgcolor: '#FFFFFF',
         borderRadius: 3,
         border: '1px solid',
         borderColor: 'divider',
         transition: 'all 0.3s ease',
         '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: '0 12px 35px rgba(108, 92, 231, 0.12)',
-          borderColor: 'primary.light'
+          borderColor: 'text.primary',
         }
       }}
       className="slide-in"
@@ -204,7 +202,7 @@ function AudioGroup({
             onChange={(e) => onToggle(e.target.checked)}
             color="primary"
           />
-          <AudioFileIcon color="primary" />
+          <AudioFileIcon color="action" />
           <TextField
             variant="standard"
             value={group.index}
@@ -212,7 +210,7 @@ function AudioGroup({
             placeholder="语料名称"
             InputProps={{
               disableUnderline: true,
-              sx: { fontSize: '1rem', fontWeight: 600, color: '#1976d2' }
+              sx: { fontSize: '1rem', fontWeight: 600, color: 'text.primary' }
             }}
             sx={{ minWidth: 200 }}
           />
@@ -220,8 +218,8 @@ function AudioGroup({
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
               size="small"
-              variant={group.isUploaded ? "outlined" : "contained"}
-              color="success"
+              variant="outlined"
+              color={group.isUploaded ? "success" : "primary"}
               startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : (group.isUploaded ? <CheckCircleIcon /> : <CloudUploadIcon />)}
               onClick={handleUpload}
               disabled={isUploading || !hasValidSegments}
@@ -230,8 +228,8 @@ function AudioGroup({
           </Button>
           <Button
             size="small"
-            variant="contained"
-            color="warning"
+            variant="text"
+            color="error"
             startIcon={<DeleteIcon />}
             onClick={() => {
               if (window.confirm(`确定要删除语料"${group.index}"的所有音频片段吗？`)) {
@@ -243,7 +241,8 @@ function AudioGroup({
           </Button>
           <Button
             size="small"
-            variant="contained"
+            variant="outlined"
+            color="secondary"
             startIcon={isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
             onClick={handlePlayGroup}
             disabled={!hasValidSegments}
@@ -252,7 +251,7 @@ function AudioGroup({
           </Button>
           <Button
             size="small"
-            variant="contained"
+            variant="outlined"
             color="secondary"
             startIcon={<DownloadIcon />}
             onClick={handleDownloadGroup}
