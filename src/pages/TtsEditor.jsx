@@ -1787,6 +1787,34 @@ function TtsEditor() {
                         animation: 'slideInRight 0.5s ease-out'
                     }}
                 >
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mr: 1 }}>
+                        <Typography variant="body2" component="div" sx={{ fontWeight: 'bold' }}>
+                            目标话术：
+                            <Typography
+                                component="span"
+                                variant="body2"
+                                onClick={handleLinkScript}
+                                sx={{
+                                    color: '#0984e3',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline',
+                                    fontWeight: 'bold',
+                                    '&:hover': { color: '#74b9ff' }
+                                }}
+                            >
+                                {targetScript ? targetScript.scriptName : '未选择'}
+                            </Typography>
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                            文本同步：
+                            <Box component="span" sx={{ color: syncTextEnabled ? 'success.main' : 'text.disabled', fontWeight: 'bold' }}>
+                                {syncTextEnabled ? '开启' : '关闭'}
+                            </Box>
+                        </Typography>
+                    </Box>
+
+                    <Divider orientation="vertical" flexItem sx={{ height: 40, alignSelf: 'center' }} />
+
                     <Box sx={{ position: 'relative', display: 'inline-flex' }}>
                         <CircularProgress
                             variant="determinate"
