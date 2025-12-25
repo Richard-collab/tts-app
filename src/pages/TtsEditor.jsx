@@ -4,7 +4,7 @@ import {
   Tabs, Tab, TextField, Button, LinearProgress, Alert,
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   List, ListItem, ListItemText, ListItemButton, Divider, Checkbox, ListItemIcon, Fab,
-  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel, Switch
+  ToggleButton, ToggleButtonGroup, Chip, FormControlLabel, Switch, Menu
 } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -20,6 +20,7 @@ import ScienceIcon from '@mui/icons-material/Science';
 import HelpIcon from '@mui/icons-material/Help';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -163,6 +164,9 @@ function TtsEditor() {
   const [isUploading, setIsUploading] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
 
+  // User Menu State
+  const [anchorElUser, setAnchorElUser] = useState(null);
+
   // Corpus Dialog State
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
   const [corpusList, setCorpusList] = useState([]);
@@ -204,6 +208,20 @@ function TtsEditor() {
   // Audio data
   const [audioGroups, setAudioGroups] = useState([]);
   const mergedAudiosRef = useRef({});
+
+  // Workspace Persistence Hook
+  const { workspaceInfo, clearWorkspace } = useWorkspacePersistence({
+    audioGroups,
+    textInput,
+    targetScript,
+    tabValue,
+    setAudioGroups,
+    setTextInput,
+    setTargetScript,
+    setTabValue,
+    baizeDataRef,
+    excelDataRef
+  });
 
   // Init user from local storage
   useEffect(() => {
@@ -301,7 +319,24 @@ function TtsEditor() {
       localStorage.removeItem('audioEditor_user');
       localStorage.removeItem('audioEditor_token');
       setMessage({ text: '已退出登录', type: 'success' });
+      setAnchorElUser(null);
   };
+
+  // User Menu Handlers
+  const handleOpenUserMenu = (event) => {
+      setAnchorElUser(event.currentTarget);
+  };
+  const handleCloseUserMenu = () => {
+      setAnchorElUser(null);
+  };
+  const handleClearWorkspace = () => {
+      if (window.confirm("确定要删除当前工作区的所有数据吗？此操作不可撤销。")) {
+          clearWorkspace();
+          setMessage({ text: '工作区已清空', type: 'success' });
+      }
+      handleCloseUserMenu();
+  };
+
 
   // Baize Import Handlers
   const handleOpenScriptDialog = async () => {
@@ -1351,7 +1386,7 @@ function TtsEditor() {
 
               }}
             >
-              {/* Login Button (Absolute Position or in a specific place) */}
+              {/* Login/User Menu Button */}
               <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 1000 }}>
                   {!user ? (
                       <Button
@@ -1364,21 +1399,74 @@ function TtsEditor() {
                           登录
                       </Button>
                   ) : (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, bgcolor: 'white', p: 1, borderRadius: 20, boxShadow: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', px: 1 }}>
-                              {user.account}
-                          </Typography>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            startIcon={<LogoutIcon />}
-                            onClick={handleLogout}
-                            sx={{ borderRadius: 20 }}
+                      <>
+                          <Box
+                              onClick={handleOpenUserMenu}
+                              sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                  bgcolor: 'white',
+                                  p: 1,
+                                  px: 2,
+                                  borderRadius: 20,
+                                  boxShadow: 1,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  '&:hover': {
+                                      bgcolor: '#f5f5f5',
+                                      boxShadow: 2
+                                  }
+                              }}
                           >
-                              退出
-                          </Button>
-                      </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {user.account}
+                              </Typography>
+                              <KeyboardArrowDownIcon color="action" />
+                          </Box>
+                          <Menu
+                              sx={{ mt: '45px' }}
+                              id="menu-appbar"
+                              anchorEl={anchorElUser}
+                              anchorOrigin={{
+                                  vertical: 'top',
+                                  horizontal: 'right',
+                              }}
+                              keepMounted
+                              transformOrigin={{
+                                  vertical: 'top',
+                                  horizontal: 'right',
+                              }}
+                              open={Boolean(anchorElUser)}
+                              onClose={handleCloseUserMenu}
+                          >
+                              <MenuItem disabled>
+                                  <Typography variant="caption" display="block" gutterBottom>
+                                      {workspaceInfo ? (
+                                        <>
+                                            {new Date(workspaceInfo.timestamp).toLocaleString()}
+                                            <br />
+                                            已保存 {workspaceInfo.count} 条语料
+                                        </>
+                                      ) : '暂无保存记录'}
+                                  </Typography>
+                              </MenuItem>
+                              <Divider />
+                              <MenuItem onClick={handleLogout}>
+                                  <ListItemIcon>
+                                      <LogoutIcon fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText>退出登录</ListItemText>
+                              </MenuItem>
+                              <Divider />
+                              <MenuItem onClick={handleClearWorkspace} sx={{ color: 'error.main' }}>
+                                  <ListItemIcon>
+                                      <DeleteIcon fontSize="small" color="error" />
+                                  </ListItemIcon>
+                                  <ListItemText>删除工作区</ListItemText>
+                              </MenuItem>
+                          </Menu>
+                      </>
                   )}
               </Box>
 
