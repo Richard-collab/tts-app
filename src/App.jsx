@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import TtsEditor from './pages/TtsEditor';
 import Home from './pages/Home';
+import LogsViewer from './pages/LogsViewer';
 import theme from './theme';
 import './App.css';
 
@@ -14,6 +15,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/tts-editor" element={<TtsEditor />} />
           <Route path="/test" element={<TtsEditor />} />
+          <Route path="/logs" element={<LogsViewer />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
