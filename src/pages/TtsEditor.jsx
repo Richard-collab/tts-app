@@ -28,6 +28,7 @@ import AudioGroup from '../components/AudioGroup';
 import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript } from '../utils/baizeApi';
 import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
 import { splitTextIntoSentences } from '../utils/textUtils';
+import { logAction, ActionTypes } from '../utils/logger';
 import '../App.css';
 
 // Voice options
@@ -307,17 +308,21 @@ function TtsEditor() {
         localStorage.setItem('audioEditor_user', JSON.stringify(newUser));
         localStorage.setItem('audioEditor_token', newToken);
 
+        logAction(ActionTypes.AUTH_LOGIN, { username: newUser.account }, 'success');
         setMessage({ text: `登录成功: ${newUser.account}`, type: 'success' });
         handleLoginClose();
     } catch (error) {
+        logAction(ActionTypes.AUTH_LOGIN, { username: loginUsername, error: error.message }, 'error');
         setMessage({ text: `登录失败: ${error.message}`, type: 'error' });
     }
   };
   const handleLogout = () => {
+      const username = user ? user.account : 'Unknown';
       setUser(null);
       setToken(null);
       localStorage.removeItem('audioEditor_user');
       localStorage.removeItem('audioEditor_token');
+      logAction(ActionTypes.AUTH_LOGOUT, { username }, 'success');
       setMessage({ text: '已退出登录', type: 'success' });
       setAnchorElUser(null);
   };
@@ -332,6 +337,7 @@ function TtsEditor() {
   const handleClearWorkspace = () => {
       if (window.confirm("确定要删除当前工作区的所有数据吗？此操作不可撤销。")) {
           clearWorkspace();
+          logAction(ActionTypes.CLEAR_WORKSPACE, 'User cleared workspace', 'success');
           setMessage({ text: '工作区已清空', type: 'success' });
       }
       handleCloseUserMenu();
@@ -422,6 +428,13 @@ function TtsEditor() {
                   setSelectedCorpusIndices(new Set());
                   setCorpusDialogOpen(true);
                   setMessage({ text: '', type: '' });
+
+          logAction(ActionTypes.IMPORT_BAIZE, {
+              scriptName: script.scriptName,
+              scriptId: script.id,
+              itemCount: preparedData.length
+          }, 'info');
+
                   return preparedData;
               }
           } else {
@@ -591,14 +604,32 @@ function TtsEditor() {
                   return updated;
               });
 
+              logAction(ActionTypes.UPLOAD_SINGLE, {
+                  groupName: group.index,
+                  scriptId: activeScript.id,
+                  contentId: contentId
+              }, 'success');
+
               setMessage({ text: `上传成功: ${group.index}`, type: 'success' });
           } else if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+              logAction(ActionTypes.UPLOAD_SINGLE, {
+                  groupName: group.index,
+                  error: 'Resource locked'
+              }, 'error');
               setMessage({ text: `上传失败: 语料被锁定`, type: 'error' });
           } else {
+              logAction(ActionTypes.UPLOAD_SINGLE, {
+                  groupName: group.index,
+                  error: res?.msg || 'Unknown error'
+              }, 'error');
               setMessage({ text: `上传失败: ${res?.msg || '未知错误'}`, type: 'error' });
           }
 
       } catch (error) {
+          logAction(ActionTypes.UPLOAD_SINGLE, {
+              groupName: group.index,
+              error: error.message
+          }, 'error');
           setMessage({ text: `上传出错: ${error.message}`, type: 'error' });
       } finally {
           // Remove from uploading set
@@ -821,12 +852,22 @@ function TtsEditor() {
             setResultDialogMessage("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
         }
 
+        const isWarning = failCount > 0 || lockedErrorOccurred;
+        logAction(ActionTypes.UPLOAD_BATCH, {
+            scriptId: activeScript.id,
+            total: groupsToUpload.length,
+            success: successCount,
+            fail: failCount,
+            locked: lockedErrorOccurred
+        }, isWarning ? 'warning' : 'success');
+
         setMessage({
             text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个${lockedErrorOccurred ? ' (包含被锁定项目)' : ''}`,
-            type: failCount > 0 ? 'warning' : 'success'
+            type: isWarning ? 'warning' : 'success'
         });
 
     } catch (error) {
+        logAction(ActionTypes.UPLOAD_BATCH, { error: error.message }, 'error');
         setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
     } finally {
         try {
@@ -1000,10 +1041,14 @@ function TtsEditor() {
 
       excelDataRef.current = validData;
       setFileName('已从剪贴板导入数据');
+
+      logAction(ActionTypes.IMPORT_PASTE, { count: validData.length }, 'success');
+
       setMessage({ text: `成功导入 ${validData.length} 条数据`, type: 'success' });
       handleClosePasteDialog();
 
     } catch (error) {
+      logAction(ActionTypes.IMPORT_PASTE, { error: error.message }, 'error');
       setMessage({ text: '解析失败: ' + error.message, type: 'error' });
     }
   };
@@ -1108,8 +1153,16 @@ function TtsEditor() {
 
       setProgress(100);
       setStatus(`音频生成完成! 共生成 ${totalSegments} 个音频片段`);
+
+      logAction(ActionTypes.SYNTHESIS_COMPLETE, {
+          totalSegments,
+          groupCount: data.length,
+          voice
+      }, 'success');
+
       setMessage({ text: '所有音频生成完成！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.SYNTHESIS_COMPLETE, { error: error.message }, 'error');
       setMessage({ text: `错误: ${error.message}`, type: 'error' });
     } finally {
       setIsGenerating(false);
@@ -1149,8 +1202,10 @@ function TtsEditor() {
 
       const content = await zip.generateAsync({ type: "blob" });
       saveAs(content, "完整音频文件.zip");
+      logAction(ActionTypes.EXPORT_AUDIO, { size: content.size }, 'success');
       setMessage({ text: '音频文件打包下载完成！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.EXPORT_AUDIO, { error: error.message }, 'error');
       setMessage({ text: `打包失败: ${error.message}`, type: 'error' });
     } finally {
       setIsDownloading(false);
@@ -1174,8 +1229,10 @@ function TtsEditor() {
       const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
       saveAs(blob, "语料导出.xlsx");
+      logAction(ActionTypes.EXPORT_EXCEL, { count: audioGroups.length }, 'success');
       setMessage({ text: 'Excel文件导出成功！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.EXPORT_EXCEL, { error: error.message }, 'error');
       setMessage({ text: `导出Excel失败: ${error.message}`, type: 'error' });
     }
   };
@@ -1254,6 +1311,7 @@ function TtsEditor() {
       }
       return updated;
     });
+    logAction(ActionTypes.DELETE_SEGMENT, { groupIndex, segmentIndex }, 'info');
     setMessage({ text: '音频片段已删除', type: 'success' });
   }, []);
 
@@ -1272,6 +1330,7 @@ function TtsEditor() {
       }
       return updated;
     });
+    logAction(ActionTypes.DELETE_GROUP, { groupIndex }, 'info');
     setMessage({ text: '音频组已删除', type: 'success' });
   }, []);
 
@@ -1298,8 +1357,10 @@ function TtsEditor() {
         error: undefined,
         played: false
       });
+      logAction(ActionTypes.REGENERATE_SEGMENT, { groupIndex, segmentIndex }, 'success');
       setMessage({ text: '音频片段重新生成成功！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.REGENERATE_SEGMENT, { error: error.message }, 'error');
       setMessage({ text: `重新生成音频失败: ${error.message}`, type: 'error' });
       throw error;
     }
@@ -1361,6 +1422,7 @@ function TtsEditor() {
       if (!baizeDataRef.current) {
           baizeDataRef.current = [{ id: 'test', text: 'test' }];
       }
+      logAction(ActionTypes.ADD_TEST_DATA, {}, 'info');
       setMessage({ text: '已添加测试数据', type: 'success' });
     } catch (error) {
       setMessage({ text: `生成测试数据失败: ${error.message}`, type: 'error' });
