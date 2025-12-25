@@ -9,7 +9,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 
-const LOG_SERVER_URL = 'http://localhost:3001/api/logs';
+const LOG_SERVER_URL = 'http://192.168.23.176:3001/api/logs';
 
 function LogsViewer() {
   const [logs, setLogs] = useState([]);

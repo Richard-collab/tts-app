@@ -29,6 +29,7 @@ import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, 
 import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
 import { splitTextIntoSentences } from '../utils/textUtils';
 import { logAction, ActionTypes } from '../utils/logger';
+import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import '../App.css';
 
 // Voice options
