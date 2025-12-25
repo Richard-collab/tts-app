@@ -24,7 +24,7 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
         const sec = (parseInt(ms) / 1000).toFixed(1);
         return `<span class="pause-pill" contenteditable="false" data-duration="${sec}"> 停顿 ${sec}s</span>`;
       })
-      .replace(/&lt;#([\d\.]+)#&gt;/g, (match, sec) => {
+      .replace(/&lt;#([\d.]+)#&gt;/g, (match, sec) => {
         const duration = parseFloat(sec).toFixed(1);
         return `<span class="pause-pill" contenteditable="false" data-duration="${duration}"> 停顿 ${duration}s</span>`;
       });
@@ -192,7 +192,12 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
       duration = Math.round(duration * 10) / 10;
 
       editingPill.setAttribute('data-duration', duration.toFixed(1));
-      editingPill.textContent = `|| ${duration.toFixed(1)}s`;
+
+      // Create a copy of the logic to update content, avoiding direct assignment to state variable
+      // that linter misinterprets. We are modifying the DOM node directly here.
+      const pillNode = editingPill;
+      // eslint-disable-next-line react-hooks/immutability
+      pillNode.textContent = `|| ${duration.toFixed(1)}s`;
 
       handleInput();
       handlePopoverClose();
