@@ -28,6 +28,7 @@ import AudioGroup from '../components/AudioGroup';
 import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript, fetchRemoteAudio } from '../utils/baizeApi';
 import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
 import { splitTextIntoSentences } from '../utils/textUtils';
+import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence';
 import '../App.css';
 
 // Voice options
