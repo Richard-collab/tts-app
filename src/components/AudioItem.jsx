@@ -10,6 +10,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import WaveformEditor from './WaveformEditor';
 import RichTextEditor from './RichTextEditor';
+import { ActionTypes, logAction } from '../utils/logger';
 
 function AudioItem({
   segment,
@@ -129,6 +130,7 @@ function AudioItem({
               onClick={() => {
                 if (richTextEditorRef.current) {
                   richTextEditorRef.current.insertPause();
+                  logAction(ActionTypes.INSERT_PAUSE, {}, 'success');
                 }
               }}
               sx={{
