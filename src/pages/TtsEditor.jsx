@@ -27,82 +27,13 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import AudioGroup from '../components/AudioGroup';
-import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript } from '../utils/baizeApi';
+import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript, fetchRemoteAudio } from '../utils/baizeApi';
+import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
+import { splitTextIntoSentences } from '../utils/textUtils';
+import { logAction, ActionTypes } from '../utils/logger';
+import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
+import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
 import '../App.css';
-
-// Buffer to WAV (moved outside component)
-function bufferToWave(abuffer, len) {
-  const numOfChan = abuffer.numberOfChannels;
-  const length = len * numOfChan * 2;
-  const buffer = new ArrayBuffer(44 + length);
-  const view = new DataView(buffer);
-  const channels = [];
-  let i, sample;
-  let offset = 0;
-  let pos = 0;
-
-  const setUint16 = (data) => { view.setUint16(offset, data, true); offset += 2; };
-  const setUint32 = (data) => { view.setUint32(offset, data, true); offset += 4; };
-
-  setUint32(0x46464952);
-  setUint32(length + 36);
-  setUint32(0x45564157);
-  setUint32(0x20746d66);
-  setUint32(16);
-  setUint16(1);
-  setUint16(numOfChan);
-  setUint32(abuffer.sampleRate);
-  setUint32(abuffer.sampleRate * 2 * numOfChan);
-  setUint16(numOfChan * 2);
-  setUint16(16);
-  setUint32(0x61746164);
-  setUint32(length);
-
-  for (i = 0; i < abuffer.numberOfChannels; i++) {
-    channels.push(abuffer.getChannelData(i));
-  }
-
-  while (pos < len) {
-    for (i = 0; i < numOfChan; i++) {
-      sample = Math.max(-1, Math.min(1, channels[i][pos]));
-      sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
-      view.setInt16(offset, sample, true);
-      offset += 2;
-    }
-    pos++;
-  }
-  return new Blob([buffer], { type: "audio/wav" });
-}
-
-// Merge buffers helper (moved outside component)
-function mergeBuffers(audioContext, audioBuffers, resolve) {
-  let totalLength = 0;
-  audioBuffers.forEach(buffer => {
-    if (buffer) totalLength += buffer.length;
-  });
-
-  const mergedBuffer = audioContext.createBuffer(
-    audioBuffers[0] ? audioBuffers[0].numberOfChannels : 1,
-    totalLength,
-    audioBuffers[0] ? audioBuffers[0].sampleRate : 44100
-  );
-
-  let offset = 0;
-  for (let i = 0; i < audioBuffers.length; i++) {
-    if (audioBuffers[i]) {
-      for (let channel = 0; channel < mergedBuffer.numberOfChannels; channel++) {
-        const channelData = mergedBuffer.getChannelData(channel);
-        const sourceData = audioBuffers[i].getChannelData(
-          channel < audioBuffers[i].numberOfChannels ? channel : 0
-        );
-        channelData.set(sourceData, offset);
-      }
-      offset += audioBuffers[i].length;
-    }
-  }
-  const wavBlob = bufferToWave(mergedBuffer, mergedBuffer.length);
-  resolve(wavBlob);
-}
 
 // Voice options
 const voiceOptions = [
@@ -240,18 +171,12 @@ function TtsEditor() {
   const [anchorElUser, setAnchorElUser] = useState(null);
   const [isProgressExpanded, setIsProgressExpanded] = useState(true);
 
+  // User Menu State
+  const [anchorElUser, setAnchorElUser] = useState(null);
+
   // Corpus Dialog State
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
   const [corpusList, setCorpusList] = useState([]);
-
-  // New Filters
-  const [filterCorpusName, setFilterCorpusName] = useState('');
-  const [filterTextContent, setFilterTextContent] = useState('');
-  const [filterProcessFlow, setFilterProcessFlow] = useState('');
-  const [filterCorpusType, setFilterCorpusType] = useState('全部');
-  const [filterAuditStatus, setFilterAuditStatus] = useState('全部');
-
-  const [selectedCorpusIndices, setSelectedCorpusIndices] = useState(new Set());
   const [tempScript, setTempScript] = useState(null);
 
   // Validation State (Target Script)
@@ -281,6 +206,20 @@ function TtsEditor() {
   // Audio data
   const [audioGroups, setAudioGroups] = useState([]);
   const mergedAudiosRef = useRef({});
+
+  // Workspace Persistence Hook
+  const { workspaceInfo, clearWorkspace } = useWorkspacePersistence({
+    audioGroups,
+    textInput,
+    targetScript,
+    tabValue,
+    setAudioGroups,
+    setTextInput,
+    setTargetScript,
+    setTabValue,
+    baizeDataRef,
+    excelDataRef
+  });
 
   // Init user from local storage
   useEffect(() => {
@@ -331,12 +270,14 @@ function TtsEditor() {
             audioBuffers[index] = buffer;
             buffersLoaded++;
             if (buffersLoaded === audioSegments.length) {
-              mergeBuffers(audioContext, audioBuffers, resolve);
+              const wavBlob = mergeBuffers(audioContext, audioBuffers);
+              resolve(wavBlob);
             }
           }, () => {
             buffersLoaded++;
             if (buffersLoaded === audioSegments.length) {
-              mergeBuffers(audioContext, audioBuffers, resolve);
+              const wavBlob = mergeBuffers(audioContext, audioBuffers);
+              resolve(wavBlob);
             }
           });
         };
@@ -364,19 +305,41 @@ function TtsEditor() {
         localStorage.setItem('audioEditor_user', JSON.stringify(newUser));
         localStorage.setItem('audioEditor_token', newToken);
 
+        logAction(ActionTypes.AUTH_LOGIN, { username: newUser.account }, 'success');
         setMessage({ text: `登录成功: ${newUser.account}`, type: 'success' });
         handleLoginClose();
     } catch (error) {
+        logAction(ActionTypes.AUTH_LOGIN, { username: loginUsername, error: error.message }, 'error');
         setMessage({ text: `登录失败: ${error.message}`, type: 'error' });
     }
   };
   const handleLogout = () => {
+      const username = user ? user.account : 'Unknown';
       setUser(null);
       setToken(null);
       localStorage.removeItem('audioEditor_user');
       localStorage.removeItem('audioEditor_token');
+      logAction(ActionTypes.AUTH_LOGOUT, { username }, 'success');
       setMessage({ text: '已退出登录', type: 'success' });
+      setAnchorElUser(null);
   };
+
+  // User Menu Handlers
+  const handleOpenUserMenu = (event) => {
+      setAnchorElUser(event.currentTarget);
+  };
+  const handleCloseUserMenu = () => {
+      setAnchorElUser(null);
+  };
+  const handleClearWorkspace = () => {
+      if (window.confirm("确定要删除当前工作区的所有数据吗？此操作不可撤销。")) {
+          clearWorkspace();
+          logAction(ActionTypes.CLEAR_WORKSPACE, 'User cleared workspace', 'success');
+          setMessage({ text: '工作区已清空', type: 'success' });
+      }
+      handleCloseUserMenu();
+  };
+
 
   // Baize Import Handlers
   const handleOpenScriptDialog = async () => {
@@ -423,6 +386,7 @@ function TtsEditor() {
                   corpusType: item.corpusType || '',
                   canvasName: item.canvasName || '',
                   audioStatus: item.audioStatus || '0',
+                  audioPath: item.audioPath || '',
                   baizeData: {
                       id: item.id,
                       corpusId: item.corpusId,
@@ -451,17 +415,15 @@ function TtsEditor() {
                   setTargetScript(script);
                   setTargetScriptCorpusList(preparedData);
 
-                  // Reset filters
-                  setFilterCorpusName('');
-                  setFilterTextContent('');
-                  setFilterProcessFlow('');
-                  setFilterCorpusType('全部');
-                  setFilterAuditStatus('全部');
-
-                  // Select none by default
-                  setSelectedCorpusIndices(new Set());
                   setCorpusDialogOpen(true);
                   setMessage({ text: '', type: '' });
+
+          logAction(ActionTypes.IMPORT_BAIZE, {
+              scriptName: script.scriptName,
+              scriptId: script.id,
+              itemCount: preparedData.length
+          }, 'info');
+
                   return preparedData;
               }
           } else {
@@ -524,28 +486,66 @@ function TtsEditor() {
       }
   };
 
-  const handleCorpusToggle = (id) => {
-      const newSelected = new Set(selectedCorpusIndices);
-      if (newSelected.has(id)) {
-          newSelected.delete(id);
-      } else {
-          newSelected.add(id);
-      }
-      setSelectedCorpusIndices(newSelected);
-  };
+  const handleCorpusConfirm = async (selectedItems) => {
+      setCorpusDialogOpen(false);
+      setIsGenerating(true);
+      setProgress(0);
+      setStatus(`正在加载 ${selectedItems.length} 个语料音频...`);
+      setMessage({ text: '', type: '' });
+      setAudioGroups([]); // Clear existing
 
-  const handleCorpusConfirm = () => {
-      const selectedItems = corpusList.filter(item => selectedCorpusIndices.has(item.uniqueId));
-      if (selectedItems.length === 0) {
-          alert("请至少选择一条语料");
-          return;
+      const newGroups = [];
+      let processedCount = 0;
+
+      for (const item of selectedItems) {
+          const group = {
+              index: item.index,
+              text: item.text,
+              segments: [],
+              baizeData: item.baizeData,
+              checked: true,
+              isUploaded: false
+          };
+
+          if (item.audioPath) {
+              try {
+                  const blob = await fetchRemoteAudio(item.audioPath);
+                  const url = URL.createObjectURL(blob);
+                  group.segments.push({
+                      text: item.text,
+                      blob: blob,
+                      url: url,
+                      played: false
+                  });
+              } catch (e) {
+                  console.error(`Failed to load audio for ${item.index}`, e);
+                  // Push text-only segment if audio load fails
+                  group.segments.push({
+                       text: item.text,
+                       // error: `加载音频失败: ${e.message}` // Optional: showing error might clutter UI if many fail
+                  });
+              }
+          } else {
+              // No audio path, just text
+              group.segments.push({
+                  text: item.text
+              });
+          }
+
+          newGroups.push(group);
+          processedCount++;
+          const percent = Math.round((processedCount / selectedItems.length) * 100);
+          setProgress(percent);
+          setStatus(`已加载 ${processedCount}/${selectedItems.length} 个语料...`);
       }
 
       baizeDataRef.current = selectedItems;
-      setAudioGroups([]); // Clear existing audio groups to prevent mixing with old data
+      setAudioGroups(newGroups);
+      mergedAudiosRef.current = {}; // Reset merged cache
+
       setFileName(`已加载话术: ${tempScript.scriptName} (${selectedItems.length}条)`);
-      setCorpusDialogOpen(false);
-      setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
+      setIsGenerating(false);
+      setMessage({ text: `话术已加载 ${selectedItems.length} 条 (含音频预览)`, type: 'success' });
   };
 
   // Core Logic for Single Upload (Extracted)
@@ -631,14 +631,32 @@ function TtsEditor() {
                   return updated;
               });
 
+              logAction(ActionTypes.UPLOAD_SINGLE, {
+                  groupName: group.index,
+                  scriptId: activeScript.id,
+                  contentId: contentId
+              }, 'success');
+
               setMessage({ text: `上传成功: ${group.index}`, type: 'success' });
           } else if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+              logAction(ActionTypes.UPLOAD_SINGLE, {
+                  groupName: group.index,
+                  error: 'Resource locked'
+              }, 'error');
               setMessage({ text: `上传失败: 语料被锁定`, type: 'error' });
           } else {
+              logAction(ActionTypes.UPLOAD_SINGLE, {
+                  groupName: group.index,
+                  error: res?.msg || 'Unknown error'
+              }, 'error');
               setMessage({ text: `上传失败: ${res?.msg || '未知错误'}`, type: 'error' });
           }
 
       } catch (error) {
+          logAction(ActionTypes.UPLOAD_SINGLE, {
+              groupName: group.index,
+              error: error.message
+          }, 'error');
           setMessage({ text: `上传出错: ${error.message}`, type: 'error' });
       } finally {
           // Remove from uploading set
@@ -861,12 +879,22 @@ function TtsEditor() {
             setResultDialogMessage("上传过程中发现部分语料被锁定，无法更新。请检查语料状态。");
         }
 
+        const isWarning = failCount > 0 || lockedErrorOccurred;
+        logAction(ActionTypes.UPLOAD_BATCH, {
+            scriptId: activeScript.id,
+            total: groupsToUpload.length,
+            success: successCount,
+            fail: failCount,
+            locked: lockedErrorOccurred
+        }, isWarning ? 'warning' : 'success');
+
         setMessage({
             text: `上传完成: 成功 ${successCount} 个, 失败 ${failCount} 个${lockedErrorOccurred ? ' (包含被锁定项目)' : ''}`,
-            type: failCount > 0 ? 'warning' : 'success'
+            type: isWarning ? 'warning' : 'success'
         });
 
     } catch (error) {
+        logAction(ActionTypes.UPLOAD_BATCH, { error: error.message }, 'error');
         setMessage({ text: `上传过程中断: ${error.message}`, type: 'error' });
     } finally {
         try {
@@ -882,26 +910,6 @@ function TtsEditor() {
         setIsUploading(false);
     }
   };
-
-  // Split text into sentences
-  const splitTextIntoSentences = useCallback((text) => {
-    const sentences = text.split(/([。？])/);
-    const result = [];
-    let currentSentence = '';
-    
-    for (let i = 0; i < sentences.length; i++) {
-      if (sentences[i].trim() === '') continue;
-      currentSentence += sentences[i];
-      if (sentences[i] === '。' || sentences[i] === '？') {
-        result.push(currentSentence.trim());
-        currentSentence = '';
-      }
-    }
-    if (currentSentence.trim() !== '') {
-      result.push(currentSentence.trim());
-    }
-    return result.filter(sentence => sentence.length > 0);
-  }, []);
 
   // Parse Excel file
   const parseExcelFile = useCallback((file) => {
@@ -1060,10 +1068,14 @@ function TtsEditor() {
 
       excelDataRef.current = validData;
       setFileName('已从剪贴板导入数据');
+
+      logAction(ActionTypes.IMPORT_PASTE, { count: validData.length }, 'success');
+
       setMessage({ text: `成功导入 ${validData.length} 条数据`, type: 'success' });
       handleClosePasteDialog();
 
     } catch (error) {
+      logAction(ActionTypes.IMPORT_PASTE, { error: error.message }, 'error');
       setMessage({ text: '解析失败: ' + error.message, type: 'error' });
     }
   };
@@ -1168,8 +1180,16 @@ function TtsEditor() {
 
       setProgress(100);
       setStatus(`音频生成完成! 共生成 ${totalSegments} 个音频片段`);
+
+      logAction(ActionTypes.SYNTHESIS_COMPLETE, {
+          totalSegments,
+          groupCount: data.length,
+          voice
+      }, 'success');
+
       setMessage({ text: '所有音频生成完成！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.SYNTHESIS_COMPLETE, { error: error.message }, 'error');
       setMessage({ text: `错误: ${error.message}`, type: 'error' });
     } finally {
       setIsGenerating(false);
@@ -1209,8 +1229,10 @@ function TtsEditor() {
 
       const content = await zip.generateAsync({ type: "blob" });
       saveAs(content, "完整音频文件.zip");
+      logAction(ActionTypes.EXPORT_AUDIO, { size: content.size }, 'success');
       setMessage({ text: '音频文件打包下载完成！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.EXPORT_AUDIO, { error: error.message }, 'error');
       setMessage({ text: `打包失败: ${error.message}`, type: 'error' });
     } finally {
       setIsDownloading(false);
@@ -1234,8 +1256,10 @@ function TtsEditor() {
       const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
       saveAs(blob, "语料导出.xlsx");
+      logAction(ActionTypes.EXPORT_EXCEL, { count: audioGroups.length }, 'success');
       setMessage({ text: 'Excel文件导出成功！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.EXPORT_EXCEL, { error: error.message }, 'error');
       setMessage({ text: `导出Excel失败: ${error.message}`, type: 'error' });
     }
   };
@@ -1314,6 +1338,7 @@ function TtsEditor() {
       }
       return updated;
     });
+    logAction(ActionTypes.DELETE_SEGMENT, { groupIndex, segmentIndex }, 'info');
     setMessage({ text: '音频片段已删除', type: 'success' });
   }, []);
 
@@ -1332,6 +1357,7 @@ function TtsEditor() {
       }
       return updated;
     });
+    logAction(ActionTypes.DELETE_GROUP, { groupIndex }, 'info');
     setMessage({ text: '音频组已删除', type: 'success' });
   }, []);
 
@@ -1358,8 +1384,10 @@ function TtsEditor() {
         error: undefined,
         played: false
       });
+      logAction(ActionTypes.REGENERATE_SEGMENT, { groupIndex, segmentIndex }, 'success');
       setMessage({ text: '音频片段重新生成成功！', type: 'success' });
     } catch (error) {
+      logAction(ActionTypes.REGENERATE_SEGMENT, { error: error.message }, 'error');
       setMessage({ text: `重新生成音频失败: ${error.message}`, type: 'error' });
       throw error;
     }
@@ -1421,6 +1449,7 @@ function TtsEditor() {
       if (!baizeDataRef.current) {
           baizeDataRef.current = [{ id: 'test', text: 'test' }];
       }
+      logAction(ActionTypes.ADD_TEST_DATA, {}, 'info');
       setMessage({ text: '已添加测试数据', type: 'success' });
     } catch (error) {
       setMessage({ text: `生成测试数据失败: ${error.message}`, type: 'error' });
@@ -1446,7 +1475,7 @@ function TtsEditor() {
 
               }}
             >
-              {/* Login Button (Absolute Position or in a specific place) */}
+              {/* Login/User Menu Button */}
               <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 1000 }}>
                   {!user ? (
                       <Fab
@@ -1459,41 +1488,72 @@ function TtsEditor() {
                       </Fab>
                   ) : (
                       <>
-                        <Fab
-                            color="secondary"
-                            aria-label="user-menu"
-                            onClick={(e) => setAnchorElUser(e.currentTarget)}
-                            size="medium"
-                        >
-                            <PersonIcon />
-                        </Fab>
-                        <Menu
-                            sx={{ mt: '45px' }}
-                            id="menu-appbar"
-                            anchorEl={anchorElUser}
-                            anchorOrigin={{
-                                vertical: 'top',
-                                horizontal: 'right',
-                            }}
-                            keepMounted
-                            transformOrigin={{
-                                vertical: 'top',
-                                horizontal: 'right',
-                            }}
-                            open={Boolean(anchorElUser)}
-                            onClose={() => setAnchorElUser(null)}
-                        >
-                            <MenuItem disabled>
-                                <Typography textAlign="center">{user.account}</Typography>
-                            </MenuItem>
-                            <Divider />
-                            <MenuItem onClick={() => { handleLogout(); setAnchorElUser(null); }}>
-                                <ListItemIcon>
-                                    <LogoutIcon fontSize="small" />
-                                </ListItemIcon>
-                                <Typography textAlign="center">退出登录</Typography>
-                            </MenuItem>
-                        </Menu>
+                          <Box
+                              onClick={handleOpenUserMenu}
+                              sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 1,
+                                  bgcolor: 'white',
+                                  p: 1,
+                                  px: 2,
+                                  borderRadius: 20,
+                                  boxShadow: 1,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  '&:hover': {
+                                      bgcolor: '#f5f5f5',
+                                      boxShadow: 2
+                                  }
+                              }}
+                          >
+                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                  {user.account}
+                              </Typography>
+                              <KeyboardArrowDownIcon color="action" />
+                          </Box>
+                          <Menu
+                              sx={{ mt: '45px' }}
+                              id="menu-appbar"
+                              anchorEl={anchorElUser}
+                              anchorOrigin={{
+                                  vertical: 'top',
+                                  horizontal: 'right',
+                              }}
+                              keepMounted
+                              transformOrigin={{
+                                  vertical: 'top',
+                                  horizontal: 'right',
+                              }}
+                              open={Boolean(anchorElUser)}
+                              onClose={handleCloseUserMenu}
+                          >
+                              <MenuItem disabled>
+                                  <Typography variant="caption" display="block" gutterBottom>
+                                      {workspaceInfo ? (
+                                        <>
+                                            {new Date(workspaceInfo.timestamp).toLocaleString()}
+                                            <br />
+                                            已保存 {workspaceInfo.count} 条语料
+                                        </>
+                                      ) : '暂无保存记录'}
+                                  </Typography>
+                              </MenuItem>
+                              <Divider />
+                              <MenuItem onClick={handleLogout}>
+                                  <ListItemIcon>
+                                      <LogoutIcon fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText>退出登录</ListItemText>
+                              </MenuItem>
+                              <Divider />
+                              <MenuItem onClick={handleClearWorkspace} sx={{ color: 'error.main' }}>
+                                  <ListItemIcon>
+                                      <DeleteIcon fontSize="small" color="error" />
+                                  </ListItemIcon>
+                                  <ListItemText>删除工作区</ListItemText>
+                              </MenuItem>
+                          </Menu>
                       </>
                   )}
               </Box>
@@ -2249,219 +2309,13 @@ function TtsEditor() {
           </Dialog>
 
           {/* Corpus Selection Dialog */}
-          <Dialog open={corpusDialogOpen} onClose={() => setCorpusDialogOpen(false)} maxWidth="lg" fullWidth>
-            <DialogTitle>选择语料</DialogTitle>
-            <DialogContent>
-                <Box sx={{ mb: 2, mt: 1 }}>
-                    <Typography variant="body2" sx={{ mb: 2 }}>
-                        当前话术: {tempScript?.scriptName}
-                    </Typography>
-
-                    {/* Filters */}
-                    <Grid container spacing={2} sx={{ mb: 2, flexWrap: 'nowrap' }}>
-                        <Grid item xs sx={{ minWidth: 0 }}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                label="语料名称"
-                                value={filterCorpusName}
-                                onChange={(e) => setFilterCorpusName(e.target.value)}
-                            />
-                        </Grid>
-                        <Grid item xs sx={{ minWidth: 0 }}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                label="文字内容"
-                                value={filterTextContent}
-                                onChange={(e) => setFilterTextContent(e.target.value)}
-                            />
-                        </Grid>
-                        <Grid item xs sx={{ minWidth: 0 }}>
-                            <TextField
-                                fullWidth
-                                size="small"
-                                label="所属流程"
-                                value={filterProcessFlow}
-                                onChange={(e) => setFilterProcessFlow(e.target.value)}
-                            />
-                        </Grid>
-                        <Grid item xs sx={{ minWidth: 0 }}>
-                            <FormControl fullWidth size="small">
-                                <InputLabel>语料类型</InputLabel>
-                                <Select
-                                    value={filterCorpusType}
-                                    label="语料类型"
-                                    onChange={(e) => setFilterCorpusType(e.target.value)}
-                                >
-                                    <MenuItem value="全部">全部</MenuItem>
-                                    <MenuItem value="主流程">主流程</MenuItem>
-                                    <MenuItem value="知识库">知识库</MenuItem>
-                                    <MenuItem value="功能话术">功能话术</MenuItem>
-                                </Select>
-                            </FormControl>
-                        </Grid>
-                        <Grid item xs sx={{ minWidth: 0 }}>
-                            <FormControl fullWidth size="small">
-                                <InputLabel>验听状态</InputLabel>
-                                <Select
-                                    value={filterAuditStatus}
-                                    label="验听状态"
-                                    onChange={(e) => setFilterAuditStatus(e.target.value)}
-                                >
-                                    <MenuItem value="全部">全部</MenuItem>
-                                    <MenuItem value="未验听">未验听</MenuItem>
-                                    <MenuItem value="已验听">已验听</MenuItem>
-                                    <MenuItem value="已标记">已标记</MenuItem>
-                                </Select>
-                            </FormControl>
-                        </Grid>
-                    </Grid>
-
-                    {/* Filter Actions and List Logic */}
-                    {(() => {
-                        const filteredCorpus = corpusList.filter(item => {
-                            // 1. Corpus Name Match
-                            const nameMatch = !filterCorpusName || item.index.toLowerCase().includes(filterCorpusName.toLowerCase());
-
-                            // 2. Text Content Match
-                            const textMatch = !filterTextContent || item.text.toLowerCase().includes(filterTextContent.toLowerCase());
-
-                            // 3. Process Flow Match
-                            const flowMatch = !filterProcessFlow || item.canvasName.toLowerCase().includes(filterProcessFlow.toLowerCase());
-
-                            // 4. Corpus Type Match
-                            let typeMatch = false;
-                            const cType = item.corpusType || '';
-                            if (filterCorpusType === '全部') {
-                                typeMatch = true;
-                            } else if (filterCorpusType === '主流程') {
-                                typeMatch = cType.startsWith('MASTER_');
-                            } else if (filterCorpusType === '知识库') {
-                                typeMatch = cType.startsWith('KNOWLEDGE_');
-                            } else if (filterCorpusType === '功能话术') {
-                                typeMatch = cType.startsWith('FUNC_') || cType.startsWith('PRE_');
-                            }
-
-                            // 5. Audit Status Match
-                            let statusMatch = false;
-                            const aStatus = item.audioStatus; // '0', '1', '2'
-                            if (filterAuditStatus === '全部') {
-                                statusMatch = true;
-                            } else if (filterAuditStatus === '未验听') {
-                                statusMatch = aStatus === '0';
-                            } else if (filterAuditStatus === '已验听') {
-                                statusMatch = aStatus === '1';
-                            } else if (filterAuditStatus === '已标记') {
-                                statusMatch = aStatus === '2';
-                            }
-
-                            return nameMatch && textMatch && flowMatch && typeMatch && statusMatch;
-                        });
-
-                        const handleSelectCurrent = () => {
-                             const newSelected = new Set(selectedCorpusIndices);
-                             filteredCorpus.forEach(item => newSelected.add(item.uniqueId));
-                             setSelectedCorpusIndices(newSelected);
-                        };
-
-                        const handleClearAll = () => {
-                             setSelectedCorpusIndices(new Set());
-                        };
-
-                        return (
-                            <>
-                                <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                                    <Button variant="contained" size="small" onClick={handleSelectCurrent}>
-                                        追选当前
-                                    </Button>
-                                    <Button variant="contained" size="small" onClick={handleClearAll}>
-                                        全部清空
-                                    </Button>
-                                </Box>
-
-                                <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto', borderTop: '1px solid #eee' }}>
-                                    {filteredCorpus.length > 0 ? (
-                                        filteredCorpus.map((item) => {
-                                            const getStatusLabel = (status) => {
-                                                switch(status) {
-                                                    case '0': return '未验听';
-                                                    case '1': return '已验听';
-                                                    case '2': return '已标记';
-                                                    default: return '未知';
-                                                }
-                                            };
-                                            const getStatusColor = (status) => {
-                                                 switch(status) {
-                                                    case '0': return 'default';
-                                                    case '1': return 'success';
-                                                    case '2': return 'error'; // Marked often implies issue or special attention
-                                                    default: return 'default';
-                                                }
-                                            };
-
-                                            return (
-                                                <div key={item.uniqueId}>
-                                                    <ListItem disablePadding>
-                                                        <ListItemButton onClick={() => handleCorpusToggle(item.uniqueId)} dense alignItems="flex-start">
-                                                            <ListItemIcon sx={{ mt: 1 }}>
-                                                                <Checkbox
-                                                                    edge="start"
-                                                                    checked={selectedCorpusIndices.has(item.uniqueId)}
-                                                                    tabIndex={-1}
-                                                                    disableRipple
-                                                                />
-                                                            </ListItemIcon>
-                                                            <ListItemText
-                                                                primary={
-                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                                                        <Typography variant="subtitle1" component="span" fontWeight="bold">
-                                                                            {item.index}
-                                                                        </Typography>
-                                                                        {item.canvasName && (
-                                                                            <Chip label={item.canvasName} size="small" variant="outlined" />
-                                                                        )}
-                                                                        <Chip
-                                                                            label={getStatusLabel(item.audioStatus)}
-                                                                            size="small"
-                                                                            color={getStatusColor(item.audioStatus)}
-                                                                            sx={{ height: 20, fontSize: '0.7rem' }}
-                                                                        />
-                                                                    </Box>
-                                                                }
-                                                                secondary={
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        {item.text}
-                                                                    </Typography>
-                                                                }
-                                                            />
-                                                        </ListItemButton>
-                                                    </ListItem>
-                                                    <Divider />
-                                                </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                                            没有找到匹配的语料
-                                        </Typography>
-                                    )}
-                                </List>
-                                <Box sx={{ mt: 2, textAlign: 'right' }}>
-                                    <Typography variant="caption" color="text.secondary">
-                                        已选择 {selectedCorpusIndices.size} 个语料
-                                    </Typography>
-                                </Box>
-                            </>
-                        );
-                    })()}
-                </Box>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={() => setCorpusDialogOpen(false)}>取消</Button>
-                <Button onClick={handleCorpusConfirm} variant="contained">确定</Button>
-            </DialogActions>
-          </Dialog>
+          <CorpusSelectionDialog
+            open={corpusDialogOpen}
+            onClose={() => setCorpusDialogOpen(false)}
+            onConfirm={handleCorpusConfirm}
+            corpusList={corpusList}
+            scriptName={tempScript?.scriptName}
+          />
 
           {/* Help Dialog */}
           <Dialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)}>

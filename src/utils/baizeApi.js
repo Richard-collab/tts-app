@@ -195,3 +195,29 @@ export async function unlockScript(token, scriptId) {
 // We already have bufferToWave in TtsEditor.jsx, we can reuse or duplicate.
 // Since this is a service file, maybe it shouldn't depend on DOM specific things unless necessary.
 // But TtsEditor.jsx has the logic. We'll pass the blob from the component.
+
+// Fetch Remote Audio (via Proxy)
+export async function fetchRemoteAudio(audioUrl) {
+    if (!audioUrl) return null;
+
+    // Check if the URL is already a proxy URL or local
+    if (audioUrl.startsWith('blob:') || audioUrl.startsWith('data:')) {
+        const response = await fetch(audioUrl);
+        return await response.blob();
+    }
+
+    const proxyUrl = `/api/proxy/get?url=${encodeURIComponent(audioUrl)}`;
+    // console.log(`Fetching remote audio via proxy: ${proxyUrl}`);
+
+    const response = await fetch(proxyUrl, {
+        method: 'GET',
+        headers: {
+            'accept': '*/*',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Fetch audio failed: ${response.status}`);
+    }
+    return await response.blob();
+}

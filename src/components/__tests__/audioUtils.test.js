@@ -1,11 +1,55 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { replaceSelection, insertAtPosition } from '../../utils/audioUtils';
+import { replaceSelection, insertAtPosition, bufferToWave, mergeBuffers } from '../../utils/audioUtils';
 
 describe('Audio Buffer Manipulation', () => {
   let audioContext;
 
   beforeEach(() => {
     audioContext = new AudioContext();
+  });
+
+  describe('bufferToWave', () => {
+    it('should convert AudioBuffer to WAV Blob', () => {
+      const buffer = audioContext.createBuffer(1, 100, 44100);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < 100; i++) {
+        data[i] = Math.sin(i / 10);
+      }
+
+      const blob = bufferToWave(buffer, buffer.length);
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob.type).toBe('audio/wav');
+
+      // WAV header is 44 bytes.
+      // 1 channel, 16-bit (2 bytes) samples.
+      // Total size = 44 + 100 * 2 = 244 bytes
+      expect(blob.size).toBe(244);
+    });
+  });
+
+  describe('mergeBuffers', () => {
+    it('should merge multiple AudioBuffers', () => {
+      const buffer1 = audioContext.createBuffer(1, 100, 44100);
+      const buffer2 = audioContext.createBuffer(1, 100, 44100);
+
+      const blob = mergeBuffers(audioContext, [buffer1, buffer2]);
+
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob.type).toBe('audio/wav');
+
+      // Total samples = 200
+      // Size = 44 + 200 * 2 = 444 bytes
+      expect(blob.size).toBe(444);
+    });
+
+    it('should handle empty or null buffers in the array', () => {
+       const buffer1 = audioContext.createBuffer(1, 100, 44100);
+
+       const blob = mergeBuffers(audioContext, [buffer1, null, undefined]);
+
+       // Should effectively be just buffer1
+       expect(blob.size).toBe(244);
+    });
   });
 
   describe('replaceSelection', () => {

@@ -113,3 +113,86 @@ export function insertAtPosition(
 
   return newBuffer;
 }
+
+/**
+ * Converts an AudioBuffer to a WAV Blob
+ * @param {AudioBuffer} abuffer - The audio buffer to convert
+ * @param {number} len - Length of the buffer in samples
+ * @returns {Blob} The WAV file blob
+ */
+export function bufferToWave(abuffer, len) {
+  const numOfChan = abuffer.numberOfChannels;
+  const length = len * numOfChan * 2;
+  const buffer = new ArrayBuffer(44 + length);
+  const view = new DataView(buffer);
+  const channels = [];
+  let i, sample;
+  let offset = 0;
+  let pos = 0;
+
+  const setUint16 = (data) => { view.setUint16(offset, data, true); offset += 2; };
+  const setUint32 = (data) => { view.setUint32(offset, data, true); offset += 4; };
+
+  setUint32(0x46464952);
+  setUint32(length + 36);
+  setUint32(0x45564157);
+  setUint32(0x20746d66);
+  setUint32(16);
+  setUint16(1);
+  setUint16(numOfChan);
+  setUint32(abuffer.sampleRate);
+  setUint32(abuffer.sampleRate * 2 * numOfChan);
+  setUint16(numOfChan * 2);
+  setUint16(16);
+  setUint32(0x61746164);
+  setUint32(length);
+
+  for (i = 0; i < abuffer.numberOfChannels; i++) {
+    channels.push(abuffer.getChannelData(i));
+  }
+
+  while (pos < len) {
+    for (i = 0; i < numOfChan; i++) {
+      sample = Math.max(-1, Math.min(1, channels[i][pos]));
+      sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+      view.setInt16(offset, sample, true);
+      offset += 2;
+    }
+    pos++;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+/**
+ * Merges multiple AudioBuffers into a single WAV Blob
+ * @param {AudioContext} audioContext - The audio context
+ * @param {AudioBuffer[]} audioBuffers - Array of audio buffers to merge
+ * @returns {Blob} The merged WAV blob
+ */
+export function mergeBuffers(audioContext, audioBuffers) {
+  let totalLength = 0;
+  audioBuffers.forEach(buffer => {
+    if (buffer) totalLength += buffer.length;
+  });
+
+  const mergedBuffer = audioContext.createBuffer(
+    audioBuffers[0] ? audioBuffers[0].numberOfChannels : 1,
+    totalLength,
+    audioBuffers[0] ? audioBuffers[0].sampleRate : 44100
+  );
+
+  let offset = 0;
+  for (let i = 0; i < audioBuffers.length; i++) {
+    if (audioBuffers[i]) {
+      for (let channel = 0; channel < mergedBuffer.numberOfChannels; channel++) {
+        const channelData = mergedBuffer.getChannelData(channel);
+        const sourceData = audioBuffers[i].getChannelData(
+          channel < audioBuffers[i].numberOfChannels ? channel : 0
+        );
+        channelData.set(sourceData, offset);
+      }
+      offset += audioBuffers[i].length;
+    }
+  }
+  return bufferToWave(mergedBuffer, mergedBuffer.length);
+}
