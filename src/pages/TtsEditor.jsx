@@ -10,6 +10,7 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import DownloadIcon from '@mui/icons-material/Download';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardDoubleArrowDown';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
@@ -172,7 +173,7 @@ function TtsEditor() {
   const [isProgressExpanded, setIsProgressExpanded] = useState(true);
 
   // User Menu State
-  const [anchorElUser, setAnchorElUser] = useState(null);
+  // const [anchorElUser, setAnchorElUser] = useState(null);
 
   // Corpus Dialog State
   const [corpusDialogOpen, setCorpusDialogOpen] = useState(false);
