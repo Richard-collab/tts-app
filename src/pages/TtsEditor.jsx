@@ -34,6 +34,7 @@ import { splitTextIntoSentences } from '../utils/textUtils';
 import { logAction, ActionTypes } from '../utils/logger';
 import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
+import ScriptSelectionDialog from '../components/ScriptSelectionDialog';
 import { voiceOptions, speedOptions, volumeOptions, pitchOptions, contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
 import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
@@ -1979,92 +1980,30 @@ function TtsEditor() {
           </Dialog>
 
           {/* Script Selection Dialog */}
-          <Dialog
+          <ScriptSelectionDialog
             open={scriptDialogOpen}
             onClose={() => {
-                setScriptDialogOpen(false);
-                // Clean up uploading state if cancelled during single upload flow
-                if (scriptDialogMode === 'single_upload' && singleUploadGroupIndex !== null) {
-                    setUploadingGroupIndices(prev => {
-                        const newSet = new Set(prev);
-                        newSet.delete(singleUploadGroupIndex);
-                        return newSet;
-                    });
-                    setSingleUploadGroupIndex(null);
-                }
+              setScriptDialogOpen(false);
+              // Clean up uploading state if cancelled during single upload flow
+              if (scriptDialogMode === 'single_upload' && singleUploadGroupIndex !== null) {
+                setUploadingGroupIndices(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(singleUploadGroupIndex);
+                  return newSet;
+                });
+                setSingleUploadGroupIndex(null);
+              }
             }}
-            maxWidth="sm"
-            fullWidth
-          >
-            <DialogTitle>选择话术导入</DialogTitle>
-            <DialogContent>
-                <Box sx={{ mb: 2, mt: 1 }}>
-                    <TextField
-                        fullWidth
-                        size="small"
-                        label="搜索话术名称"
-                        value={scriptSearch}
-                        onChange={(e) => setScriptSearch(e.target.value)}
-                        placeholder="输入关键词筛选..."
-                    />
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={syncTextEnabled}
-                                onChange={(e) => setSyncTextEnabled(e.target.checked)}
-                            />
-                        }
-                        label="同步文本内容"
-                    />
-                </Box>
-                {isFetchingScripts ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <List sx={{ pt: 0, maxHeight: '400px', overflow: 'auto' }}>
-                        {scriptList.filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase())).length > 0 ? (
-                            scriptList
-                                .filter(s => s.scriptName.toLowerCase().includes(scriptSearch.toLowerCase()))
-                                .sort((a, b) => {
-                                  // Sort selected script to top if exists
-                                  if (selectedScript) {
-                                      if (a.id === selectedScript.id) return -1;
-                                      if (b.id === selectedScript.id) return 1;
-                                  }
-                                  return 0; // Keep original order otherwise
-                                })
-                                .map((script) => (
-                                <Box key={script.id}>
-                                    <ListItem disablePadding>
-                                        <ListItemButton
-                                          onClick={() => handleScriptSelect(script)}
-                                          selected={selectedScript && selectedScript.id === script.id}
-                                        >
-                                            <ListItemText
-                                                primary={script.scriptName}
-                                                secondary={`ID: ${script.id} | Industry: ${script.primaryIndustry}`}
-                                            />
-                                        </ListItemButton>
-                                    </ListItem>
-                                    <Divider />
-                                </Box>
-                            ))
-                        ) : (
-                            <Typography sx={{ p: 2, textAlign: 'center', color: 'text.secondary' }}>
-                                没有找到匹配的话术
-                            </Typography>
-                        )}
-                    </List>
-                )}
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={() => setScriptDialogOpen(false)}>取消</Button>
-                <Button onClick={handleScriptDialogConfirm} variant="contained" disabled={!selectedScript}>
-                  确定
-                </Button>
-            </DialogActions>
-          </Dialog>
+            onConfirm={handleScriptDialogConfirm}
+            scripts={scriptList}
+            loading={isFetchingScripts}
+            searchTerm={scriptSearch}
+            onSearchChange={(e) => setScriptSearch(e.target.value)}
+            selectedScript={selectedScript}
+            onSelectScript={handleScriptSelect}
+            syncTextEnabled={syncTextEnabled}
+            onSyncTextChange={(e) => setSyncTextEnabled(e.target.checked)}
+          />
 
           {/* Result Dialog */}
           <Dialog open={resultDialogOpen} onClose={() => setResultDialogOpen(false)}>
