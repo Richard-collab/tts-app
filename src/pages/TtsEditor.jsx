@@ -35,7 +35,7 @@ import { logAction, ActionTypes } from '../utils/logger';
 import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
 import { voiceOptions, speedOptions, volumeOptions, pitchOptions, contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
-import { parseExcelFile } from '../utils/fileParser';
+import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
 import '../App.css';
 
@@ -853,50 +853,8 @@ function TtsEditor() {
   };
 
   const handlePasteConfirm = () => {
-    if (!pasteContent.trim()) {
-      setMessage({ text: '粘贴内容为空', type: 'error' });
-      return;
-    }
     try {
-      // Manual TSV parsing to ensure robustness with Unicode and avoid library dependencies for simple text
-      const rows = pasteContent.trim().split(/\r?\n/);
-      if (rows.length < 2) {
-        setMessage({ text: '粘贴内容必须包含表头和至少一行数据', type: 'error' });
-        return;
-      }
-
-      // Parse headers
-      const headers = rows[0].split('\t').map(h => h.trim());
-      const nameIndex = headers.indexOf('语料名称');
-      const textIndex = headers.indexOf('文字内容');
-
-      if (nameIndex === -1 || textIndex === -1) {
-        setMessage({ text: '粘贴内容必须包含"语料名称"和"文字内容"列表头', type: 'error' });
-        return;
-      }
-
-      const validData = [];
-      for (let i = 1; i < rows.length; i++) {
-        const rowData = rows[i].split('\t');
-        // Ensure row has enough columns
-        if (rowData.length <= Math.max(nameIndex, textIndex)) continue;
-
-        const name = rowData[nameIndex]?.trim();
-        const text = rowData[textIndex]?.trim(); // Note: text might contain quotes if Excel exported it that way, but usually simple copy-paste is raw text.
-                                                 // If needed, we could strip surrounding quotes, but usually not needed for simple copy.
-
-        if (name && text) {
-          validData.push({
-            index: name,
-            text: text
-          });
-        }
-      }
-
-      if (validData.length === 0) {
-        setMessage({ text: '粘贴内容中没有有效的文本数据', type: 'error' });
-        return;
-      }
+      const validData = parseTSVContent(pasteContent);
 
       excelDataRef.current = validData;
       setFileName('已从剪贴板导入数据');
@@ -907,8 +865,17 @@ function TtsEditor() {
       handleClosePasteDialog();
 
     } catch (error) {
+      // If error message is one of our custom ones, display it directly.
+      // Otherwise prefix with "解析失败".
+      // Since parseTSVContent throws specific friendly errors, we can just use error.message
+      // However, to match previous behavior for unknown errors, we can check.
+      // But simpler is to trust the utility.
+
       logAction(ActionTypes.IMPORT_PASTE, { error: error.message }, 'error');
-      setMessage({ text: '解析失败: ' + error.message, type: 'error' });
+
+      // We'll keep the UI consistent with the utility's error messages
+      // If the utility throws "粘贴内容为空", we show that.
+      setMessage({ text: error.message, type: 'error' });
     }
   };
 
