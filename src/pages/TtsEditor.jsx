@@ -29,7 +29,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import AudioGroup from '../components/AudioGroup';
 import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript, fetchRemoteAudio } from '../utils/baizeApi';
-import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
+import { bufferToWave, mergeAudioSegments } from '../utils/audioUtils';
 import { splitTextIntoSentences } from '../utils/textUtils';
 import { logAction, ActionTypes } from '../utils/logger';
 import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
@@ -154,36 +154,6 @@ function TtsEditor() {
           setIsFetchingScripts(false);
       });
   }, [token, targetScript]);
-
-  // Merge audio segments (Moved UP to be accessible by handleSingleGroupUpload)
-  const mergeAudioSegments = useCallback(async (audioSegments) => {
-    return new Promise((resolve) => {
-      const audioContext = new AudioContext({ sampleRate: 8000 });
-      const audioBuffers = [];
-      let buffersLoaded = 0;
-
-      audioSegments.forEach((segment, index) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          audioContext.decodeAudioData(e.target.result, (buffer) => {
-            audioBuffers[index] = buffer;
-            buffersLoaded++;
-            if (buffersLoaded === audioSegments.length) {
-              const wavBlob = mergeBuffers(audioContext, audioBuffers);
-              resolve(wavBlob);
-            }
-          }, () => {
-            buffersLoaded++;
-            if (buffersLoaded === audioSegments.length) {
-              const wavBlob = mergeBuffers(audioContext, audioBuffers);
-              resolve(wavBlob);
-            }
-          });
-        };
-        reader.readAsArrayBuffer(segment.blob);
-      });
-    });
-  }, []);
 
   // Login Handlers
   const handleLoginOpen = () => setLoginOpen(true);
@@ -572,7 +542,7 @@ function TtsEditor() {
               console.error("Lock failed", e);
           }
       }
-  }, [audioGroups, token, syncTextEnabled, mergeAudioSegments]);
+  }, [audioGroups, token, syncTextEnabled]);
 
   // Single Group Upload Handler (UI Entry Point)
   const handleSingleGroupUpload = useCallback(async (groupIndex) => {
