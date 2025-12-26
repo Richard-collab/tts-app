@@ -34,112 +34,10 @@ import { splitTextIntoSentences } from '../utils/textUtils';
 import { logAction, ActionTypes } from '../utils/logger';
 import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
+import { voiceOptions, speedOptions, volumeOptions, pitchOptions, contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
+import { parseExcelFile } from '../utils/fileParser';
+import { fetchWithRetry } from '../utils/networkUtils';
 import '../App.css';
-
-// Voice options
-const voiceOptions = [
-  { value: '', label: '请选择...' },
-  { value: 'LAX音色-阿里', label: 'LAX音色-阿里' },
-  { value: 'LS音色-阿里', label: 'LS音色-阿里' },
-  { value: 'YD音色-MinMax', label: 'YD音色-MinMax' },
-  { value: 'YD音色1-MinMax', label: 'YD音色1-MinMax' },
-  { value: 'YD音色2-MinMax', label: 'YD音色2-MinMax' },
-  { value: 'YY音色-MinMax', label: 'YY音色-MinMax' },
-  { value: 'XL音色-MinMax', label: 'XL音色-MinMax' },
-  { value: 'TT音色-MinMax', label: 'TT音色-MinMax' },
-  { value: 'MD音色-MinMax', label: 'MD音色-MinMax' },
-  { value: 'LS音色-MinMax', label: 'LS音色-MinMax' },
-  { value: 'WW音色-MinMax', label: 'WW音色-MinMax' },
-  { value: 'LAX音色-MinMax', label: 'LAX音色-MinMax' },
-  { value: 'YZ音色-MinMax', label: 'YZ音色-MinMax' },
-  { value: 'YZ音色-MinMax', label: 'YZ音色-MinMax'},
-  { value: 'YD音色1', label: 'YD音色1' },
-  { value: 'YD音色2', label: 'YD音色2' },
-  { value: 'YY音色', label: 'YY音色' },
-  { value: 'XL音色', label: 'XL音色' },
-  { value: 'TT音色', label: 'TT音色' },
-  { value: 'MD音色', label: 'MD音色' },
-  { value: 'LS音色', label: 'LS音色' },
-  { value: '清甜桃桃', label: '清甜桃桃' },
-  { value: '软萌团子', label: '软萌团子' },
-];
-
-// Speed options
-const speedOptions = [
-  { value: '0.5', label: '0.5 (很慢)' },
-  { value: '0.6', label: '0.6' },
-  { value: '0.7', label: '0.7' },
-  { value: '0.8', label: '0.8' },
-  { value: '0.9', label: '0.9' },
-  { value: '1.0', label: '1.0 (正常)' },
-  { value: '1.1', label: '1.1' },
-  { value: '1.2', label: '1.2' },
-  { value: '1.3', label: '1.3' },
-  { value: '1.4', label: '1.4' },
-  { value: '1.5', label: '1.5 (很快)' },
-];
-
-// Volume options
-const volumeOptions = [
-  { value: '0.5', label: '0.5 (较小)' },
-  { value: '0.6', label: '0.6' },
-  { value: '0.7', label: '0.7' },
-  { value: '0.8', label: '0.8' },
-  { value: '0.9', label: '0.9' },
-  { value: '1.0', label: '1.0 (正常)' },
-  { value: '1.1', label: '1.1' },
-  { value: '1.2', label: '1.2' },
-  { value: '1.3', label: '1.3' },
-  { value: '1.4', label: '1.4' },
-  { value: '1.5', label: '1.5 (较大)' },
-];
-
-// Pitch options
-const pitchOptions = [
-  { value: '0.1', label: '0.1 (较低)' },
-  { value: '0.2', label: '0.2' },
-  { value: '0.3', label: '0.3' },
-  { value: '0.4', label: '0.4' },
-  { value: '0.5', label: '0.5' },
-  { value: '0.6', label: '0.6' },
-  { value: '0.7', label: '0.7' },
-  { value: '0.8', label: '0.8' },
-  { value: '0.9', label: '0.9' },
-  { value: '1.0', label: '1.0 (正常)' },
-  { value: '1.1', label: '1.1' },
-  { value: '1.2', label: '1.2' },
-  { value: '1.3', label: '1.3' },
-  { value: '1.4', label: '1.4' },
-  { value: '1.5', label: '1.5' },
-  { value: '1.6', label: '1.6' },
-  { value: '1.7', label: '1.7' },
-  { value: '1.8', label: '1.8' },
-  { value: '1.9', label: '1.9' },
-  { value: '2.0', label: '2.0 (较高)' },
-];
-
-const contentLeft = `额，XXX。呃，XXX。嗯，XXX
-嗯XXX。啊XXX。哎XXX。XXX嘛。XXX哈。XXX啊。XXX呀。
-这个XXX。那XXX。这个XXX。它这个XXX。那就XXX。
-XXX的话XXX。XXX的。XXX啦。
-XXX的话，XXX呢，
-然后XXX。也就是XXX。那也XXX。您看XXX。另外XXX。然后的话XXX。
-XXX好吧。XXX好嘛。XXX的哈。
-那这个XXX还是XXX。就XXX也XXX。那XXX也XXX。`;
-
-const contentRight1 = `
-如，银行的行，避免读成行走的行，直接改成“银航”
-`;
-
-const contentRight2 = `
-那这个。然后呢。接下来。接下来的话。嗯然后就是。它这个。的那个。呃这个。再加上。
-`;
-
-const contentRight3 = `
-1、加强语气：“”《》【】、、、！
-2、避免合成断词断错，可以用引号或括号把某些词圈到一起：“” '' <>《》（）【】
-3、让断句更合理：用对逗号句号
-`;
 
 function TtsEditor() {
   // Form state
@@ -912,73 +810,6 @@ function TtsEditor() {
     }
   };
 
-  // Parse Excel file
-  const parseExcelFile = useCallback((file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          
-          if (jsonData.length === 0) {
-            reject(new Error('Excel文件中没有数据'));
-            return;
-          }
-          
-          const firstRow = jsonData[0];
-          if (!Object.prototype.hasOwnProperty.call(firstRow, '语料名称') || !Object.prototype.hasOwnProperty.call(firstRow, '文字内容')) {
-            reject(new Error('Excel文件表头必须包含"语料名称"和"文字内容"列'));
-            return;
-          }
-          
-          const validData = jsonData
-            .filter(row => row['语料名称'] && row['文字内容'])
-            .map(row => ({
-              index: row['语料名称'],
-              text: row['文字内容'].toString().trim()
-            }))
-            .filter(item => item.text !== '');
-          
-          if (validData.length === 0) {
-            reject(new Error('Excel文件中没有有效的文本数据'));
-            return;
-          }
-          resolve(validData);
-        } catch (error) {
-          reject(new Error('解析Excel文件失败: ' + error.message));
-        }
-      };
-      reader.onerror = () => reject(new Error('读取文件失败'));
-      reader.readAsArrayBuffer(file);
-    });
-  }, []);
-
-  // Fetch with retry
-  const fetchWithRetry = useCallback(async (url, options, maxRetries = 3, retryDelay = 1000) => {
-    let lastError;
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        const response = await fetch(url, options);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `请求失败: ${response.status}`);
-        }
-        return response;
-      } catch (error) {
-        lastError = error;
-        if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          retryDelay *= 2;
-        }
-      }
-    }
-    throw lastError;
-  }, []);
-
   // Generate single audio
   const generateSingleAudio = useCallback(async (text, voiceVal, speedVal, volumeVal, pitchVal) => {
     const response = await fetchWithRetry('http://192.168.23.176:6789/synthesize', {
@@ -993,7 +824,7 @@ function TtsEditor() {
       })
     }, 3, 1000);
     return await response.blob();
-  }, [fetchWithRetry]);
+  }, []);
 
   // Handle file change
   const handleFileChange = async (e) => {
