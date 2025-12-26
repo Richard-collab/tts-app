@@ -196,3 +196,60 @@ export function mergeBuffers(audioContext, audioBuffers) {
   }
   return bufferToWave(mergedBuffer, mergedBuffer.length);
 }
+
+/**
+ * Merges an array of audio segments (blobs) into a single WAV Blob.
+ *
+ * @param {Array<{blob: Blob}>} audioSegments - Array of audio segments containing blobs
+ * @returns {Promise<Blob>} A promise that resolves to the merged WAV Blob
+ */
+export async function mergeAudioSegments(audioSegments) {
+  return new Promise((resolve, reject) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+      const audioBuffers = [];
+      let buffersLoaded = 0;
+
+      if (audioSegments.length === 0) {
+        resolve(null);
+        return;
+      }
+
+      audioSegments.forEach((segment, index) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          audioContext.decodeAudioData(e.target.result, (buffer) => {
+            audioBuffers[index] = buffer;
+            buffersLoaded++;
+            if (buffersLoaded === audioSegments.length) {
+              try {
+                const wavBlob = mergeBuffers(audioContext, audioBuffers);
+                resolve(wavBlob);
+              } catch (err) {
+                reject(err);
+              }
+            }
+          }, (err) => {
+            console.error('Error decoding audio data', err);
+            // Even if one fails, we might want to continue or fail.
+            // Original logic continued but didn't handle the error case well in the callback (it just called mergeBuffers anyway).
+            // We'll mimic the original logic which incremented buffersLoaded.
+            buffersLoaded++;
+            if (buffersLoaded === audioSegments.length) {
+               try {
+                const wavBlob = mergeBuffers(audioContext, audioBuffers);
+                resolve(wavBlob);
+              } catch (err) {
+                reject(err);
+              }
+            }
+          });
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsArrayBuffer(segment.blob);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
