@@ -25,11 +25,10 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import AudioGroup from '../components/AudioGroup';
-import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript, fetchRemoteAudio } from '../utils/baizeApi';
+import { login, fetchScripts, fetchScriptCorpus, uploadAudio, updateScriptText, lockScript, unlockScript } from '../utils/baizeApi';
 import { bufferToWave, mergeBuffers } from '../utils/audioUtils';
 import { splitTextIntoSentences } from '../utils/textUtils';
 import { logAction, ActionTypes } from '../utils/logger';
-import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import '../App.css';
 
 // Voice options
@@ -390,7 +389,6 @@ function TtsEditor() {
                   corpusType: item.corpusType || '',
                   canvasName: item.canvasName || '',
                   audioStatus: item.audioStatus || '0',
-                  audioPath: item.audioPath || '',
                   baizeData: {
                       id: item.id,
                       corpusId: item.corpusId,
@@ -509,72 +507,18 @@ function TtsEditor() {
       setSelectedCorpusIndices(newSelected);
   };
 
-  const handleCorpusConfirm = async () => {
+  const handleCorpusConfirm = () => {
       const selectedItems = corpusList.filter(item => selectedCorpusIndices.has(item.uniqueId));
       if (selectedItems.length === 0) {
           alert("请至少选择一条语料");
           return;
       }
 
-      setCorpusDialogOpen(false);
-      setIsGenerating(true);
-      setProgress(0);
-      setStatus(`正在加载 ${selectedItems.length} 个语料音频...`);
-      setMessage({ text: '', type: '' });
-      setAudioGroups([]); // Clear existing
-
-      const newGroups = [];
-      let processedCount = 0;
-
-      for (const item of selectedItems) {
-          const group = {
-              index: item.index,
-              text: item.text,
-              segments: [],
-              baizeData: item.baizeData,
-              checked: true,
-              isUploaded: false
-          };
-
-          if (item.audioPath) {
-              try {
-                  const blob = await fetchRemoteAudio(item.audioPath);
-                  const url = URL.createObjectURL(blob);
-                  group.segments.push({
-                      text: item.text,
-                      blob: blob,
-                      url: url,
-                      played: false
-                  });
-              } catch (e) {
-                  console.error(`Failed to load audio for ${item.index}`, e);
-                  // Push text-only segment if audio load fails
-                  group.segments.push({
-                       text: item.text,
-                       // error: `加载音频失败: ${e.message}` // Optional: showing error might clutter UI if many fail
-                  });
-              }
-          } else {
-              // No audio path, just text
-              group.segments.push({
-                  text: item.text
-              });
-          }
-
-          newGroups.push(group);
-          processedCount++;
-          const percent = Math.round((processedCount / selectedItems.length) * 100);
-          setProgress(percent);
-          setStatus(`已加载 ${processedCount}/${selectedItems.length} 个语料...`);
-      }
-
       baizeDataRef.current = selectedItems;
-      setAudioGroups(newGroups);
-      mergedAudiosRef.current = {}; // Reset merged cache
-
+      setAudioGroups([]); // Clear existing audio groups to prevent mixing with old data
       setFileName(`已加载话术: ${tempScript.scriptName} (${selectedItems.length}条)`);
-      setIsGenerating(false);
-      setMessage({ text: `话术已加载 ${selectedItems.length} 条 (含音频预览)`, type: 'success' });
+      setCorpusDialogOpen(false);
+      setMessage({ text: `话术已加载 ${selectedItems.length} 条，请点击"开始逐个合成音频"`, type: 'success' });
   };
 
   // Core Logic for Single Upload (Extracted)

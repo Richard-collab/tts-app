@@ -1,5 +1,5 @@
 // src/pages/LogsViewer.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Container, Paper, Typography, Box, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, FormControl, InputLabel,
@@ -8,8 +8,6 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
-
-const LOG_SERVER_URL = 'http://192.168.23.176:3001/api/logs';
 
 function LogsViewer() {
   const [logs, setLogs] = useState([]);
@@ -22,6 +20,11 @@ function LogsViewer() {
 
   const navigate = useNavigate();
 
+  // Dynamically determine URL
+  const logServerUrl = useMemo(() => {
+    return `http://${window.location.hostname}:3001/api/logs`;
+  }, []);
+
   const fetchLogs = async () => {
     setLoading(true);
     setError(null);
@@ -30,7 +33,7 @@ function LogsViewer() {
       if (filterAction !== 'all') params.append('action_type', filterAction);
       if (filterStatus !== 'all') params.append('status', filterStatus);
 
-      const res = await fetch(`${LOG_SERVER_URL}?${params.toString()}`);
+      const res = await fetch(`${logServerUrl}?${params.toString()}`);
       if (!res.ok) {
         throw new Error('Failed to fetch logs');
       }
@@ -46,7 +49,7 @@ function LogsViewer() {
   useEffect(() => {
     fetchLogs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterAction, filterStatus]);
+  }, [filterAction, filterStatus, logServerUrl]);
 
   const formatDetails = (detailsStr) => {
     try {
@@ -129,7 +132,7 @@ function LogsViewer() {
 
         {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
-                连接日志服务器失败 ({LOG_SERVER_URL})。请确保服务器正在运行。
+                连接日志服务器失败 ({logServerUrl})。请确保服务器正在运行。
                 <br />
                 Error: {error}
             </Alert>

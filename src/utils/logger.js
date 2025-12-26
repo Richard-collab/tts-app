@@ -1,6 +1,11 @@
 // src/utils/logger.js
 
-const LOG_SERVER_URL = 'http://192.168.23.176:3001/api/logs';
+// Dynamically determine the server URL based on the current page's hostname
+// This allows it to work on localhost, 192.168.x.x, or any domain
+const getLogServerUrl = () => {
+    const hostname = window.location.hostname;
+    return `http://${hostname}:3001/api/logs`;
+};
 
 export const ActionTypes = {
   AUTH_LOGIN: 'AUTH_LOGIN',
@@ -51,7 +56,7 @@ export const logAction = async (actionType, details = {}, status = 'info') => {
     };
 
     // Fire and forget - don't await this in critical paths unless debugging
-    fetch(LOG_SERVER_URL, {
+    fetch(getLogServerUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
