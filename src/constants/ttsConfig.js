@@ -13,6 +13,8 @@ export const voiceOptions = [
   { value: 'WW音色-MinMax', label: 'WW音色-MinMax' },
   { value: 'LAX音色-MinMax', label: 'LAX音色-MinMax' },
   { value: 'YZ音色-MinMax', label: 'YZ音色-MinMax' },
+  { value: 'LX音色-MinMax', label: 'YZ音色-MinMax'},
+  { value: 'LYY音色-MinMax', label: 'YZ音色-MinMax'},
   { value: 'YZ音色-MinMax', label: 'YZ音色-MinMax'},
   { value: 'YD音色1', label: 'YD音色1' },
   { value: 'YD音色2', label: 'YD音色2' },
