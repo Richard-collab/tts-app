@@ -36,7 +36,8 @@ import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
 import ScriptSelectionDialog from '../components/ScriptSelectionDialog';
 import TtsControls from '../components/TtsControls';
-import { voiceOptions, speedOptions, volumeOptions, pitchOptions, contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
+import UploadProgressBar from '../components/UploadProgressBar';
+import { contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
 import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
 import '../App.css';
@@ -1710,104 +1711,17 @@ function TtsEditor() {
              </Fab>
 
              {/* Floating Progress Bar */}
-             {audioGroups.length > 0 && baizeDataRef.current && (
-                <Box
-                    sx={{
-                        position: 'fixed',
-                        bottom: 40,
-                        right: 40,
-                        bgcolor: 'background.paper',
-                        boxShadow: 3,
-                        borderRadius: 4,
-                        p: 2,
-                        zIndex: 1000,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                        transition: 'all 0.3s ease',
-                    }}
-                >
-                    <IconButton
-                        onClick={() => setIsProgressExpanded(!isProgressExpanded)}
-                        size="small"
-                        aria-label="toggle progress bar"
-                        sx={{ mr: isProgressExpanded ? 1 : 0 }}
-                    >
-                        {isProgressExpanded ? <KeyboardArrowRightIcon /> : <KeyboardArrowLeftIcon />}
-                    </IconButton>
-
-                    {isProgressExpanded && (
-                        <>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', mr: 1, minWidth: 150 }}>
-                                <Typography variant="body2" component="div" sx={{ fontWeight: 'bold' }}>
-                                    目标话术：
-                                    <Typography
-                                        component="span"
-                                        variant="body2"
-                                        onClick={handleLinkScript}
-                                        sx={{
-                                            color: '#0984e3',
-                                            cursor: 'pointer',
-                                            textDecoration: 'underline',
-                                            fontWeight: 'bold',
-                                            '&:hover': { color: '#74b9ff' }
-                                        }}
-                                    >
-                                        {targetScript ? targetScript.scriptName : '未选择'}
-                                    </Typography>
-                                </Typography>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                                        文本同步
-                                    </Typography>
-                                    <Switch
-                                        size="small"
-                                        checked={syncTextEnabled}
-                                        onChange={(e) => setSyncTextEnabled(e.target.checked)}
-                                        inputProps={{ 'aria-label': 'sync text switch' }}
-                                    />
-                                </Box>
-                            </Box>
-
-                            <Divider orientation="vertical" flexItem sx={{ height: 40, alignSelf: 'center' }} />
-                        </>
-                    )}
-
-                    <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-                        <CircularProgress
-                            variant="determinate"
-                            value={(audioGroups.filter(g => g.isUploaded).length / audioGroups.length) * 100}
-                            size={50}
-                            thickness={4}
-                            sx={{ color: '#00CEC9' }}
-                        />
-                        <Box
-                            sx={{
-                                top: 0,
-                                left: 0,
-                                bottom: 0,
-                                right: 0,
-                                position: 'absolute',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            <Typography variant="caption" component="div" color="text.secondary">
-                                {Math.round((audioGroups.filter(g => g.isUploaded).length / audioGroups.length) * 100)}%
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <Box>
-                        <Typography variant="subtitle2" fontWeight="bold">
-                            上传进度
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            {audioGroups.filter(g => g.isUploaded).length} / {audioGroups.length}
-                        </Typography>
-                    </Box>
-                </Box>
-            )}
+             <UploadProgressBar
+                visible={audioGroups.length > 0 && !!baizeDataRef.current}
+                isExpanded={isProgressExpanded}
+                onToggleExpand={() => setIsProgressExpanded(!isProgressExpanded)}
+                targetScript={targetScript}
+                onLinkScript={handleLinkScript}
+                syncTextEnabled={syncTextEnabled}
+                onSyncTextChange={(e) => setSyncTextEnabled(e.target.checked)}
+                uploadedCount={audioGroups.filter(g => g.isUploaded).length}
+                totalCount={audioGroups.length}
+             />
           
             {/* <Grid item xs={12} md={5}> */}
                 <Paper
