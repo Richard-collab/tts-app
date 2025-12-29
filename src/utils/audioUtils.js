@@ -1,3 +1,5 @@
+import { PitchShifter } from 'soundtouchjs';
+
 /**
  * Helper functions for audio buffer manipulation operations
  * These functions are extracted to be testable independently of the UI components
@@ -204,54 +206,42 @@ export function mergeBuffers(audioContext, audioBuffers) {
  * @returns {Promise<Blob>} A promise that resolves to the merged WAV Blob
  */
 /**
- * Time stretch an audio buffer while preserving pitch
- * Uses a basic Overlap-Add (OLA) algorithm
+ * Time stretch an audio buffer while preserving pitch using SoundTouchJS
  * @param {AudioBuffer} buffer - The source audio buffer
  * @param {number} speed - Speed ratio (e.g., 1.05 for 5% faster)
- * @param {AudioContext} audioContext - AudioContext for creating new buffer
- * @returns {AudioBuffer} New time-stretched audio buffer
+ * @returns {Promise<AudioBuffer>} New time-stretched audio buffer
  */
-export function timeStretch(buffer, speed, audioContext) {
-  const channels = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const length = buffer.length;
-  const newLength = Math.floor(length / speed);
+export async function timeStretch(buffer, speed) {
+  const newDuration = buffer.duration / speed;
+  const newLength = Math.ceil(newDuration * buffer.sampleRate);
 
-  const newBuffer = audioContext.createBuffer(channels, newLength, sampleRate);
+  // Use OfflineAudioContext to render the processed audio
+  const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+    2, // SoundTouchJS outputs stereo
+    newLength,
+    buffer.sampleRate
+  );
 
-  const windowSize = 2048; // Adjust based on sample rate if needed
-  const overlap = windowSize / 2;
-  const hs = overlap; // Synthesis Hop (constant step in output)
-  const ha = hs * speed; // Analysis Hop (variable step in input)
+  const pitchShifter = new PitchShifter(offlineCtx, buffer, 4096);
+  pitchShifter.tempo = speed;
+  pitchShifter.pitch = 1.0;
 
-  // Create Hanning window
-  const win = new Float32Array(windowSize);
-  for (let i = 0; i < windowSize; i++) {
-    win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / windowSize));
+  pitchShifter.connect(offlineCtx.destination);
+
+  const renderedBuffer = await offlineCtx.startRendering();
+
+  // If input was mono, extract only the first channel to return a mono buffer
+  if (buffer.numberOfChannels === 1) {
+    const monoBuffer = new AudioBuffer({
+      length: renderedBuffer.length,
+      numberOfChannels: 1,
+      sampleRate: renderedBuffer.sampleRate
+    });
+    monoBuffer.copyToChannel(renderedBuffer.getChannelData(0), 0);
+    return monoBuffer;
   }
 
-  for (let c = 0; c < channels; c++) {
-    const inputData = buffer.getChannelData(c);
-    const outputData = newBuffer.getChannelData(c);
-
-    // We iterate output positions
-    let analysisPos = 0;
-    let synthesisPos = 0;
-
-    while (synthesisPos + windowSize < newLength && analysisPos + windowSize < length) {
-      // Add windowed segment to output
-      for (let i = 0; i < windowSize; i++) {
-        // Use nearest neighbor for analysis position (Math.floor)
-        // OLA requires accumulating values
-        outputData[synthesisPos + i] += inputData[Math.floor(analysisPos) + i] * win[i];
-      }
-
-      analysisPos += ha;
-      synthesisPos += hs;
-    }
-  }
-
-  return newBuffer;
+  return renderedBuffer;
 }
 
 export async function mergeAudioSegments(audioSegments) {

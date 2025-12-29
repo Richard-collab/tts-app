@@ -644,7 +644,7 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
   }, [audioBuffer, silenceLength, cursorTime, currentTime, updateAudioBuffer, clearSelection]);
 
   // Speed Adjustment
-  const handleSpeedChange = useCallback(() => {
+  const handleSpeedChange = useCallback(async () => {
     if (!selection || !audioBuffer || !audioContextRef.current) return;
 
     try {
@@ -669,8 +669,8 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
         }
       }
 
-      // Time stretch
-      const stretchedBuffer = timeStretch(selectionBuffer, speedRatio, audioContextRef.current);
+      // Time stretch (async)
+      const stretchedBuffer = await timeStretch(selectionBuffer, speedRatio);
 
       // Replace selection with stretched buffer
       const newBuffer = replaceSelection(
