@@ -801,7 +801,7 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
     <Dialog 
       open={open} 
       onClose={onClose} 
-      maxWidth="lg" 
+      maxWidth="xl" 
       fullWidth
       PaperProps={{
         sx: { minHeight: '60vh' }
