@@ -1,3 +1,5 @@
+import { PitchShifter } from 'soundtouchjs';
+
 /**
  * Helper functions for audio buffer manipulation operations
  * These functions are extracted to be testable independently of the UI components
@@ -203,6 +205,45 @@ export function mergeBuffers(audioContext, audioBuffers) {
  * @param {Array<{blob: Blob}>} audioSegments - Array of audio segments containing blobs
  * @returns {Promise<Blob>} A promise that resolves to the merged WAV Blob
  */
+/**
+ * Time stretch an audio buffer while preserving pitch using SoundTouchJS
+ * @param {AudioBuffer} buffer - The source audio buffer
+ * @param {number} speed - Speed ratio (e.g., 1.05 for 5% faster)
+ * @returns {Promise<AudioBuffer>} New time-stretched audio buffer
+ */
+export async function timeStretch(buffer, speed) {
+  const newDuration = buffer.duration / speed;
+  const newLength = Math.ceil(newDuration * buffer.sampleRate);
+
+  // Use OfflineAudioContext to render the processed audio
+  const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+    2, // SoundTouchJS outputs stereo
+    newLength,
+    buffer.sampleRate
+  );
+
+  const pitchShifter = new PitchShifter(offlineCtx, buffer, 4096);
+  pitchShifter.tempo = speed;
+  pitchShifter.pitch = 1.0;
+
+  pitchShifter.connect(offlineCtx.destination);
+
+  const renderedBuffer = await offlineCtx.startRendering();
+
+  // If input was mono, extract only the first channel to return a mono buffer
+  if (buffer.numberOfChannels === 1) {
+    const monoBuffer = new AudioBuffer({
+      length: renderedBuffer.length,
+      numberOfChannels: 1,
+      sampleRate: renderedBuffer.sampleRate
+    });
+    monoBuffer.copyToChannel(renderedBuffer.getChannelData(0), 0);
+    return monoBuffer;
+  }
+
+  return renderedBuffer;
+}
+
 export async function mergeAudioSegments(audioSegments) {
   return new Promise((resolve, reject) => {
     try {

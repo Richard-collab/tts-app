@@ -20,7 +20,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/plugins/regions';
-import { replaceSelection, insertAtPosition } from '../utils/audioUtils';
+import { replaceSelection, insertAtPosition, timeStretch } from '../utils/audioUtils';
+import SpeedIcon from '@mui/icons-material/Speed';
 
 // Helper function to convert AudioBuffer to WAV Blob (outside component)
 function bufferToWaveBlob(buffer) {
@@ -93,6 +94,7 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
   const [containerReady, setContainerReady] = useState(false);
   const [isWavesurferReady, setIsWavesurferReady] = useState(false);
   const [silenceLength, setSilenceLength] = useState(0.5);
+  const [speedRatio, setSpeedRatio] = useState(1.05);
   const audioContextRef = useRef(null);
   const regionsPluginRef = useRef(null);
   const tempUrlRef = useRef(null); // Track temporary object URLs for cleanup
@@ -641,6 +643,67 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
     }
   }, [audioBuffer, silenceLength, cursorTime, currentTime, updateAudioBuffer, clearSelection]);
 
+  // Speed Adjustment
+  const handleSpeedChange = useCallback(async () => {
+    if (!selection || !audioBuffer || !audioContextRef.current) return;
+
+    try {
+      // Extract selection buffer
+      const startSample = Math.floor(selection.start * audioBuffer.sampleRate);
+      const endSample = Math.floor(selection.end * audioBuffer.sampleRate);
+      const length = endSample - startSample;
+
+      if (length <= 0) return;
+
+      const selectionBuffer = audioContextRef.current.createBuffer(
+        audioBuffer.numberOfChannels,
+        length,
+        audioBuffer.sampleRate
+      );
+
+      for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+        const sourceData = audioBuffer.getChannelData(channel);
+        const destData = selectionBuffer.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+          destData[i] = sourceData[startSample + i];
+        }
+      }
+
+      // Time stretch (async)
+      const stretchedBuffer = await timeStretch(selectionBuffer, speedRatio);
+
+      // Replace selection with stretched buffer
+      const newBuffer = replaceSelection(
+        audioBuffer,
+        stretchedBuffer,
+        startSample,
+        endSample,
+        audioContextRef.current
+      );
+
+      updateAudioBuffer(newBuffer);
+
+      // Update selection to match new length
+      const newDuration = stretchedBuffer.length / stretchedBuffer.sampleRate;
+      const newEnd = selection.start + newDuration;
+
+      // Wait for reload
+      setTimeout(() => {
+         if (regionsPluginRef.current) {
+          regionsPluginRef.current.clearRegions();
+          regionsPluginRef.current.addRegion({
+            start: selection.start,
+            end: newEnd,
+            color: 'rgba(108, 92, 231, 0.3)',
+          });
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error('Failed to change speed:', error);
+    }
+  }, [selection, audioBuffer, speedRatio, updateAudioBuffer]);
+
   // Adjust volume/loudness for selection or entire audio
   const handleVolumeAdjust = useCallback((newVolume, sourceBuffer = null) => {
     const bufferToUse = sourceBuffer || audioBuffer;
@@ -817,141 +880,175 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
       <DialogContent dividers>
         {/* Toolbar */}
         <Paper sx={{ p: 1, mb: 2, bgcolor: '#F8F9FA' }}>
-          <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" justifyContent="center">
-            {/* Silence Length Input */}
-            <TextField
-              label="空白音(秒)"
-              type="number"
-              value={silenceLength}
-              onChange={(e) => {
-                const value = parseFloat(e.target.value);
-                // if (!isNaN(value) && value >= 0.1 && value <= 30) {
-                //   setSilenceLength(value);
-                // }
-                setSilenceLength(!isNaN(value)?value:'');
-              }}
-              inputProps={{
-                min: 0.1,
-                max: 30,
-                step: 0.1,
-              }}
-              size="small"
-              sx={{ width: 120 }}
-            />
+          <Stack spacing={1}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" justifyContent="center">
+              {/* Silence Length Input */}
+              <TextField
+                label="空白音(秒)"
+                type="number"
+                value={silenceLength}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  // if (!isNaN(value) && value >= 0.1 && value <= 30) {
+                  //   setSilenceLength(value);
+                  // }
+                  setSilenceLength(!isNaN(value)?value:'');
+                }}
+                inputProps={{
+                  min: 0.1,
+                  max: 30,
+                  step: 0.1,
+                }}
+                size="small"
+                sx={{ width: 120 }}
+              />
 
-            {/* Loop Toggle */}
-            <Tooltip title={isLooping ? "关闭循环播放" : (selection ? "开启循环播放选区" : "开启循环播放整个音频")}>
-              <Button
-                variant={isLooping ? "contained" : "outlined"}
-                startIcon={<LoopIcon />}
-                onClick={handleToggleLoop}
-                color={isLooping ? "secondary" : "primary"}
-              >
-                {isLooping ? '循环中' : '循环'}
-              </Button>
-            </Tooltip>
+              {/* Loop Toggle */}
+              <Tooltip title={isLooping ? "关闭循环播放" : (selection ? "开启循环播放选区" : "开启循环播放整个音频")}>
+                <Button
+                  variant={isLooping ? "contained" : "outlined"}
+                  startIcon={<LoopIcon />}
+                  onClick={handleToggleLoop}
+                  color={isLooping ? "secondary" : "primary"}
+                >
+                  {isLooping ? '循环中' : '循环'}
+                </Button>
+              </Tooltip>
 
-            {/* Play/Stop */}
-            <Tooltip title={isPlaying ? "停止 (空格)" : "播放 (空格)"}>
-              <Button
-                variant="contained"
-                startIcon={isPlaying ? <StopIcon /> : <PlayArrowIcon />}
-                onClick={handlePlayStop}
-                color={isPlaying ? "error" : "primary"}
-              >
-                {isPlaying ? '停止' : '播放'}
-              </Button>
-            </Tooltip>
+              {/* Play/Stop */}
+              <Tooltip title={isPlaying ? "停止 (空格)" : "播放 (空格)"}>
+                <Button
+                  variant="contained"
+                  startIcon={isPlaying ? <StopIcon /> : <PlayArrowIcon />}
+                  onClick={handlePlayStop}
+                  color={isPlaying ? "error" : "primary"}
+                >
+                  {isPlaying ? '停止' : '播放'}
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-            {/* Copy */}
-            <Tooltip title="复制 (Ctrl+C)">
-              <Button
-                variant="outlined"
-                startIcon={<ContentCopyIcon />}
-                onClick={handleCopy}
-                disabled={!selection}
-              >
-                复制
-              </Button>
-            </Tooltip>
+              {/* Copy */}
+              <Tooltip title="复制 (Ctrl+C)">
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={handleCopy}
+                  disabled={!selection}
+                >
+                  复制
+                </Button>
+              </Tooltip>
 
-            {/* Cut */}
-            <Tooltip title="剪切 (Ctrl+X)">
-              <Button
-                variant="outlined"
-                startIcon={<ContentCutIcon />}
-                onClick={handleCut}
-                disabled={!selection}
-              >
-                剪切
-              </Button>
-            </Tooltip>
+              {/* Cut */}
+              <Tooltip title="剪切 (Ctrl+X)">
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCutIcon />}
+                  onClick={handleCut}
+                  disabled={!selection}
+                >
+                  剪切
+                </Button>
+              </Tooltip>
 
-            {/* Insert Silence */}
-            <Tooltip title="插入空白音">
-              <Button
-                variant="outlined"
-                startIcon={<PauseCircleIcon />}
-                onClick={handleInsertSilence}
-                disabled={!audioBuffer}
-              >
-                插入空白音
-              </Button>
-            </Tooltip>
+              {/* Paste */}
+              <Tooltip title="粘贴 (Ctrl+V)">
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentPasteIcon />}
+                  onClick={handlePaste}
+                  disabled={!clipboard}
+                >
+                  粘贴
+                </Button>
+              </Tooltip>
 
-            {/* Paste */}
-            <Tooltip title="粘贴 (Ctrl+V)">
-              <Button
-                variant="outlined"
-                startIcon={<ContentPasteIcon />}
-                onClick={handlePaste}
-                disabled={!clipboard}
-              >
-                粘贴
-              </Button>
-            </Tooltip>
+              {/* Insert Silence */}
+              <Tooltip title="插入空白音">
+                <Button
+                  variant="outlined"
+                  startIcon={<PauseCircleIcon />}
+                  onClick={handleInsertSilence}
+                  disabled={!audioBuffer}
+                >
+                  插入空白音
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-            {/* Undo */}
-            <Tooltip title="撤销 (Ctrl+Z)">
-              <Button
-                variant="outlined"
-                startIcon={<UndoIcon />}
-                onClick={handleUndo}
-                disabled={historyIndex <= 0}
-              >
-                撤销
-              </Button>
-            </Tooltip>
+              {/* Undo */}
+              <Tooltip title="撤销 (Ctrl+Z)">
+                <Button
+                  variant="outlined"
+                  startIcon={<UndoIcon />}
+                  onClick={handleUndo}
+                  disabled={historyIndex <= 0}
+                >
+                  撤销
+                </Button>
+              </Tooltip>
 
-            {/* Redo */}
-            <Tooltip title="恢复 (Ctrl+Y)">
-              <Button
-                variant="outlined"
-                startIcon={<RedoIcon />}
-                onClick={handleRedo}
-                disabled={historyIndex >= history.length - 1}
-              >
-                恢复
-              </Button>
-            </Tooltip>
+              {/* Redo */}
+              <Tooltip title="恢复 (Ctrl+Y)">
+                <Button
+                  variant="outlined"
+                  startIcon={<RedoIcon />}
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1}
+                >
+                  恢复
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-            {/* Save */}
-            <Tooltip title="保存 (Ctrl+S)">
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<SaveIcon />}
-                onClick={handleSave}
-              >
-                保存
-              </Button>
-            </Tooltip>
+              {/* Save */}
+              <Tooltip title="保存 (Ctrl+S)">
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                >
+                  保存
+                </Button>
+              </Tooltip>
+            </Stack>
+
+            <Divider />
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" justifyContent="center">
+              {/* Speed Adjustment */}
+              <TextField
+                label="调速比例"
+                type="number"
+                value={speedRatio}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setSpeedRatio(!isNaN(value) ? value : '');
+                }}
+                inputProps={{
+                  step: 0.05,
+                  min: 0.1,
+                  max: 4.0
+                }}
+                size="small"
+                sx={{ width: 100 }}
+              />
+              <Tooltip title="调速 (选区)">
+                <Button
+                  variant="outlined"
+                  startIcon={<SpeedIcon />}
+                  onClick={handleSpeedChange}
+                  disabled={!selection}
+                >
+                  调速
+                </Button>
+              </Tooltip>
+            </Stack>
           </Stack>
         </Paper>
 
