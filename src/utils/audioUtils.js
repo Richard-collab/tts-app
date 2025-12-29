@@ -203,6 +203,57 @@ export function mergeBuffers(audioContext, audioBuffers) {
  * @param {Array<{blob: Blob}>} audioSegments - Array of audio segments containing blobs
  * @returns {Promise<Blob>} A promise that resolves to the merged WAV Blob
  */
+/**
+ * Time stretch an audio buffer while preserving pitch
+ * Uses a basic Overlap-Add (OLA) algorithm
+ * @param {AudioBuffer} buffer - The source audio buffer
+ * @param {number} speed - Speed ratio (e.g., 1.05 for 5% faster)
+ * @param {AudioContext} audioContext - AudioContext for creating new buffer
+ * @returns {AudioBuffer} New time-stretched audio buffer
+ */
+export function timeStretch(buffer, speed, audioContext) {
+  const channels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const length = buffer.length;
+  const newLength = Math.floor(length / speed);
+
+  const newBuffer = audioContext.createBuffer(channels, newLength, sampleRate);
+
+  const windowSize = 2048; // Adjust based on sample rate if needed
+  const overlap = windowSize / 2;
+  const hs = overlap; // Synthesis Hop (constant step in output)
+  const ha = hs * speed; // Analysis Hop (variable step in input)
+
+  // Create Hanning window
+  const win = new Float32Array(windowSize);
+  for (let i = 0; i < windowSize; i++) {
+    win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / windowSize));
+  }
+
+  for (let c = 0; c < channels; c++) {
+    const inputData = buffer.getChannelData(c);
+    const outputData = newBuffer.getChannelData(c);
+
+    // We iterate output positions
+    let analysisPos = 0;
+    let synthesisPos = 0;
+
+    while (synthesisPos + windowSize < newLength && analysisPos + windowSize < length) {
+      // Add windowed segment to output
+      for (let i = 0; i < windowSize; i++) {
+        // Use nearest neighbor for analysis position (Math.floor)
+        // OLA requires accumulating values
+        outputData[synthesisPos + i] += inputData[Math.floor(analysisPos) + i] * win[i];
+      }
+
+      analysisPos += ha;
+      synthesisPos += hs;
+    }
+  }
+
+  return newBuffer;
+}
+
 export async function mergeAudioSegments(audioSegments) {
   return new Promise((resolve, reject) => {
     try {
