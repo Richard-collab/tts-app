@@ -1,6 +1,47 @@
 import * as XLSX from 'xlsx';
 
 /**
+ * Aggregates data by text content.
+ * Merges entries with identical text into a single entry with joined names.
+ *
+ * @param {Array<{index: string, text: string}>} dataList - The list of raw data entries.
+ * @returns {Array<{index: string, text: string}>} - The aggregated list.
+ */
+const aggregateDataByText = (dataList) => {
+  const map = new Map();
+
+  dataList.forEach(item => {
+    // Normalize text for comparison (trim)
+    const normalizedText = item.text; // Text is already trimmed in extraction phase
+
+    if (!map.has(normalizedText)) {
+      map.set(normalizedText, {
+        names: new Set(), // Use Set to avoid duplicates if same name appears multiple times for same text
+        text: item.text
+      });
+    }
+
+    // Split incoming name by '&' just in case the source itself has "A&B"
+    const names = item.index.split('&').map(n => n.trim()).filter(n => n !== '');
+    names.forEach(name => map.get(normalizedText).names.add(name));
+  });
+
+  const result = [];
+  map.forEach((value) => {
+    // Convert Set to Array and join with '&'
+    const combinedName = Array.from(value.names).join('&');
+    if (combinedName) {
+      result.push({
+        index: combinedName,
+        text: value.text
+      });
+    }
+  });
+
+  return result;
+};
+
+/**
  * Parses an Excel file and extracts data from the first sheet.
  * Expects columns '语料名称' and '文字内容'.
  *
@@ -29,7 +70,7 @@ export const parseExcelFile = (file) => {
           return;
         }
 
-        const validData = [];
+        const rawData = [];
         jsonData.forEach(row => {
           if (row['语料名称'] !== undefined && row['语料名称'] !== null && row['文字内容']) {
             const rawName = row['语料名称'].toString();
@@ -37,23 +78,20 @@ export const parseExcelFile = (file) => {
 
             if (text === '') return;
 
-            // Split by '&', trim whitespace, and create an entry for each name
-            const names = rawName.split('&').map(n => n.trim()).filter(n => n !== '');
-
-            names.forEach(name => {
-              validData.push({
-                index: name,
-                text: text
-              });
+            rawData.push({
+              index: rawName,
+              text: text
             });
           }
         });
 
-        if (validData.length === 0) {
+        if (rawData.length === 0) {
           reject(new Error('Excel文件中没有有效的文本数据'));
           return;
         }
-        resolve(validData);
+
+        const aggregatedData = aggregateDataByText(rawData);
+        resolve(aggregatedData);
       } catch (error) {
         reject(new Error('解析Excel文件失败: ' + error.message));
       }
@@ -91,7 +129,7 @@ export const parseTSVContent = (content) => {
     throw new Error('粘贴内容必须包含"语料名称"和"文字内容"列表头');
   }
 
-  const validData = [];
+  const rawData = [];
   for (let i = 1; i < rows.length; i++) {
     const rowData = rows[i].split('\t');
     // Ensure row has enough columns
@@ -101,21 +139,16 @@ export const parseTSVContent = (content) => {
     const text = rowData[textIndex]?.trim();
 
     if (name && text) {
-      // Split by '&', trim whitespace, and create an entry for each name
-      const names = name.split('&').map(n => n.trim()).filter(n => n !== '');
-
-      names.forEach(n => {
-        validData.push({
-          index: n,
-          text: text
-        });
+      rawData.push({
+        index: name,
+        text: text
       });
     }
   }
 
-  if (validData.length === 0) {
+  if (rawData.length === 0) {
     throw new Error('粘贴内容中没有有效的文本数据');
   }
 
-  return validData;
+  return aggregateDataByText(rawData);
 };
