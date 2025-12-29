@@ -880,173 +880,175 @@ function WaveformEditor({ open, onClose, audioUrl, audioBlob, onSave, initialLoo
       <DialogContent dividers>
         {/* Toolbar */}
         <Paper sx={{ p: 1, mb: 2, bgcolor: '#F8F9FA' }}>
-          <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" justifyContent="center">
-            {/* Silence Length Input */}
-            <TextField
-              label="空白音(秒)"
-              type="number"
-              value={silenceLength}
-              onChange={(e) => {
-                const value = parseFloat(e.target.value);
-                // if (!isNaN(value) && value >= 0.1 && value <= 30) {
-                //   setSilenceLength(value);
-                // }
-                setSilenceLength(!isNaN(value)?value:'');
-              }}
-              inputProps={{
-                min: 0.1,
-                max: 30,
-                step: 0.1,
-              }}
-              size="small"
-              sx={{ width: 120 }}
-            />
+          <Stack spacing={1}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" justifyContent="center">
+              {/* Silence Length Input */}
+              <TextField
+                label="空白音(秒)"
+                type="number"
+                value={silenceLength}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  // if (!isNaN(value) && value >= 0.1 && value <= 30) {
+                  //   setSilenceLength(value);
+                  // }
+                  setSilenceLength(!isNaN(value)?value:'');
+                }}
+                inputProps={{
+                  min: 0.1,
+                  max: 30,
+                  step: 0.1,
+                }}
+                size="small"
+                sx={{ width: 120 }}
+              />
 
-            {/* Loop Toggle */}
-            <Tooltip title={isLooping ? "关闭循环播放" : (selection ? "开启循环播放选区" : "开启循环播放整个音频")}>
-              <Button
-                variant={isLooping ? "contained" : "outlined"}
-                startIcon={<LoopIcon />}
-                onClick={handleToggleLoop}
-                color={isLooping ? "secondary" : "primary"}
-              >
-                {isLooping ? '循环中' : '循环'}
-              </Button>
-            </Tooltip>
+              {/* Loop Toggle */}
+              <Tooltip title={isLooping ? "关闭循环播放" : (selection ? "开启循环播放选区" : "开启循环播放整个音频")}>
+                <Button
+                  variant={isLooping ? "contained" : "outlined"}
+                  startIcon={<LoopIcon />}
+                  onClick={handleToggleLoop}
+                  color={isLooping ? "secondary" : "primary"}
+                >
+                  {isLooping ? '循环中' : '循环'}
+                </Button>
+              </Tooltip>
 
-            {/* Play/Stop */}
-            <Tooltip title={isPlaying ? "停止 (空格)" : "播放 (空格)"}>
-              <Button
-                variant="contained"
-                startIcon={isPlaying ? <StopIcon /> : <PlayArrowIcon />}
-                onClick={handlePlayStop}
-                color={isPlaying ? "error" : "primary"}
-              >
-                {isPlaying ? '停止' : '播放'}
-              </Button>
-            </Tooltip>
+              {/* Play/Stop */}
+              <Tooltip title={isPlaying ? "停止 (空格)" : "播放 (空格)"}>
+                <Button
+                  variant="contained"
+                  startIcon={isPlaying ? <StopIcon /> : <PlayArrowIcon />}
+                  onClick={handlePlayStop}
+                  color={isPlaying ? "error" : "primary"}
+                >
+                  {isPlaying ? '停止' : '播放'}
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-            {/* Copy */}
-            <Tooltip title="复制 (Ctrl+C)">
-              <Button
-                variant="outlined"
-                startIcon={<ContentCopyIcon />}
-                onClick={handleCopy}
-                disabled={!selection}
-              >
-                复制
-              </Button>
-            </Tooltip>
+              {/* Copy */}
+              <Tooltip title="复制 (Ctrl+C)">
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={handleCopy}
+                  disabled={!selection}
+                >
+                  复制
+                </Button>
+              </Tooltip>
 
-            {/* Cut */}
-            <Tooltip title="剪切 (Ctrl+X)">
-              <Button
-                variant="outlined"
-                startIcon={<ContentCutIcon />}
-                onClick={handleCut}
-                disabled={!selection}
-              >
-                剪切
-              </Button>
-            </Tooltip>
+              {/* Cut */}
+              <Tooltip title="剪切 (Ctrl+X)">
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentCutIcon />}
+                  onClick={handleCut}
+                  disabled={!selection}
+                >
+                  剪切
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              {/* Paste */}
+              <Tooltip title="粘贴 (Ctrl+V)">
+                <Button
+                  variant="outlined"
+                  startIcon={<ContentPasteIcon />}
+                  onClick={handlePaste}
+                  disabled={!clipboard}
+                >
+                  粘贴
+                </Button>
+              </Tooltip>
 
-            {/* Speed Adjustment */}
-            <TextField
-              label="调速比例"
-              type="number"
-              value={speedRatio}
-              onChange={(e) => {
-                const value = parseFloat(e.target.value);
-                setSpeedRatio(!isNaN(value) ? value : '');
-              }}
-              inputProps={{
-                step: 0.05,
-                min: 0.1,
-                max: 4.0
-              }}
-              size="small"
-              sx={{ width: 100 }}
-            />
-            <Tooltip title="调速 (选区)">
-              <Button
-                variant="outlined"
-                startIcon={<SpeedIcon />}
-                onClick={handleSpeedChange}
-                disabled={!selection}
-              >
-                调速
-              </Button>
-            </Tooltip>
+              {/* Insert Silence */}
+              <Tooltip title="插入空白音">
+                <Button
+                  variant="outlined"
+                  startIcon={<PauseCircleIcon />}
+                  onClick={handleInsertSilence}
+                  disabled={!audioBuffer}
+                >
+                  插入空白音
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-            {/* Insert Silence */}
-            <Tooltip title="插入空白音">
-              <Button
-                variant="outlined"
-                startIcon={<PauseCircleIcon />}
-                onClick={handleInsertSilence}
-                disabled={!audioBuffer}
-              >
-                插入空白音
-              </Button>
-            </Tooltip>
+              {/* Undo */}
+              <Tooltip title="撤销 (Ctrl+Z)">
+                <Button
+                  variant="outlined"
+                  startIcon={<UndoIcon />}
+                  onClick={handleUndo}
+                  disabled={historyIndex <= 0}
+                >
+                  撤销
+                </Button>
+              </Tooltip>
 
-            {/* Paste */}
-            <Tooltip title="粘贴 (Ctrl+V)">
-              <Button
-                variant="outlined"
-                startIcon={<ContentPasteIcon />}
-                onClick={handlePaste}
-                disabled={!clipboard}
-              >
-                粘贴
-              </Button>
-            </Tooltip>
+              {/* Redo */}
+              <Tooltip title="恢复 (Ctrl+Y)">
+                <Button
+                  variant="outlined"
+                  startIcon={<RedoIcon />}
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1}
+                >
+                  恢复
+                </Button>
+              </Tooltip>
 
-            <Divider orientation="vertical" flexItem />
+              <Divider orientation="vertical" flexItem />
 
-            {/* Undo */}
-            <Tooltip title="撤销 (Ctrl+Z)">
-              <Button
-                variant="outlined"
-                startIcon={<UndoIcon />}
-                onClick={handleUndo}
-                disabled={historyIndex <= 0}
-              >
-                撤销
-              </Button>
-            </Tooltip>
+              {/* Save */}
+              <Tooltip title="保存 (Ctrl+S)">
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                >
+                  保存
+                </Button>
+              </Tooltip>
+            </Stack>
 
-            {/* Redo */}
-            <Tooltip title="恢复 (Ctrl+Y)">
-              <Button
-                variant="outlined"
-                startIcon={<RedoIcon />}
-                onClick={handleRedo}
-                disabled={historyIndex >= history.length - 1}
-              >
-                恢复
-              </Button>
-            </Tooltip>
+            <Divider />
 
-            <Divider orientation="vertical" flexItem />
-
-            {/* Save */}
-            <Tooltip title="保存 (Ctrl+S)">
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<SaveIcon />}
-                onClick={handleSave}
-              >
-                保存
-              </Button>
-            </Tooltip>
+            <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" justifyContent="center">
+              {/* Speed Adjustment */}
+              <TextField
+                label="调速比例"
+                type="number"
+                value={speedRatio}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  setSpeedRatio(!isNaN(value) ? value : '');
+                }}
+                inputProps={{
+                  step: 0.05,
+                  min: 0.1,
+                  max: 4.0
+                }}
+                size="small"
+                sx={{ width: 100 }}
+              />
+              <Tooltip title="调速 (选区)">
+                <Button
+                  variant="outlined"
+                  startIcon={<SpeedIcon />}
+                  onClick={handleSpeedChange}
+                  disabled={!selection}
+                >
+                  调速
+                </Button>
+              </Tooltip>
+            </Stack>
           </Stack>
         </Paper>
 
