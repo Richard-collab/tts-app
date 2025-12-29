@@ -29,13 +29,25 @@ export const parseExcelFile = (file) => {
           return;
         }
 
-        const validData = jsonData
-          .filter(row => row['语料名称'] && row['文字内容'])
-          .map(row => ({
-            index: row['语料名称'],
-            text: row['文字内容'].toString().trim()
-          }))
-          .filter(item => item.text !== '');
+        const validData = [];
+        jsonData.forEach(row => {
+          if (row['语料名称'] !== undefined && row['语料名称'] !== null && row['文字内容']) {
+            const rawName = row['语料名称'].toString();
+            const text = row['文字内容'].toString().trim();
+
+            if (text === '') return;
+
+            // Split by '&', trim whitespace, and create an entry for each name
+            const names = rawName.split('&').map(n => n.trim()).filter(n => n !== '');
+
+            names.forEach(name => {
+              validData.push({
+                index: name,
+                text: text
+              });
+            });
+          }
+        });
 
         if (validData.length === 0) {
           reject(new Error('Excel文件中没有有效的文本数据'));
@@ -89,9 +101,14 @@ export const parseTSVContent = (content) => {
     const text = rowData[textIndex]?.trim();
 
     if (name && text) {
-      validData.push({
-        index: name,
-        text: text
+      // Split by '&', trim whitespace, and create an entry for each name
+      const names = name.split('&').map(n => n.trim()).filter(n => n !== '');
+
+      names.forEach(n => {
+        validData.push({
+          index: n,
+          text: text
+        });
       });
     }
   }
