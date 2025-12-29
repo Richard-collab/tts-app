@@ -2,7 +2,7 @@ export const voiceOptions = [
   { value: '', label: '请选择...' },
   { value: 'LAX音色-阿里', label: 'LAX音色-阿里' },
   { value: 'LS音色-阿里', label: 'LS音色-阿里' },
-  { value: 'YD音色-MinMax', label: 'YD音色-MinMax' },
+  // { value: 'YD音色-MinMax', label: 'YD音色-MinMax' },
   { value: 'YD音色1-MinMax', label: 'YD音色1-MinMax' },
   { value: 'YD音色2-MinMax', label: 'YD音色2-MinMax' },
   { value: 'YY音色-MinMax', label: 'YY音色-MinMax' },
