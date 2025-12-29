@@ -250,22 +250,54 @@ function TtsEditor() {
           const corpusData = res?.data?.scriptUnitContents || res?.scriptUnitContents;
 
           if (corpusData && Array.isArray(corpusData)) {
-              // No aggregation
-              const preparedData = corpusData.map((item, idx) => ({
-                  index: item.contentName || `导入语料-${idx+1}`,
-                  text: item.content,
-                  corpusType: item.corpusType || '',
-                  canvasName: item.canvasName || '',
-                  audioStatus: item.audioStatus || '0',
-                  audioPath: item.audioPath || '',
-                  baizeData: {
-                      id: item.id,
-                      corpusId: item.corpusId,
-                      text: item.content,
-                      originalData: item
-                  },
-                  uniqueId: item.id || idx // Use ID if available, else index
-              }));
+              // Aggregation by text content
+              const aggregationMap = new Map();
+              corpusData.forEach((item, idx) => {
+                  const text = item.content;
+                  if (!text) return;
+
+                  if (!aggregationMap.has(text)) {
+                      aggregationMap.set(text, {
+                          text: text,
+                          names: [],
+                          items: [],
+                          primaryItem: item,
+                          firstIdx: idx
+                      });
+                  }
+
+                  const entry = aggregationMap.get(text);
+                  const name = item.contentName || `导入语料-${idx+1}`;
+                  entry.names.push(name);
+                  entry.items.push(item);
+              });
+
+              const preparedData = Array.from(aggregationMap.values()).map((entry) => {
+                  const combinedName = entry.names.join('&');
+                  const primary = entry.primaryItem;
+
+                  return {
+                      index: combinedName,
+                      text: entry.text,
+                      corpusType: primary.corpusType || '',
+                      canvasName: primary.canvasName || '',
+                      audioStatus: primary.audioStatus || '0',
+                      audioPath: primary.audioPath || '',
+                      baizeData: {
+                          id: primary.id,
+                          corpusId: primary.corpusId,
+                          text: entry.text,
+                          originalData: primary
+                      },
+                      baizeTargets: entry.items.map(item => ({
+                          id: item.id,
+                          corpusId: item.corpusId,
+                          text: item.content,
+                          originalData: item
+                      })),
+                      uniqueId: primary.id || entry.firstIdx
+                  };
+              });
 
               if (mode === 'link' || mode === 'batch_upload') {
                   // Only set target script for validation context
@@ -374,6 +406,7 @@ function TtsEditor() {
               text: item.text,
               segments: [],
               baizeData: item.baizeData,
+              baizeTargets: item.baizeTargets,
               checked: true,
               isUploaded: false
           };
@@ -478,26 +511,48 @@ function TtsEditor() {
           const originalText = matchedCorpus.text; // Use matched corpus text as original reference
           const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
-          const contentId = matchedCorpus.baizeData.id; // Use matched ID
+          // Iterate over all targets
+          const targets = matchedCorpus.baizeTargets || [matchedCorpus.baizeData];
+          let successCount = 0;
+          let failCount = 0;
+          let locked = false;
 
-          // Upload Audio
-          const filename = `${group.index}.wav`;
-          const res = await uploadAudio(token, contentId, mergedBlob, filename);
+          for (const target of targets) {
+              const contentId = target.id;
+              const filename = `${group.index}.wav`;
 
-          if (res && res.code === "2000") {
-              if (isTextChanged && syncTextEnabled) {
-                  const corpusId = matchedCorpus.baizeData.corpusId;
-                  await updateScriptText(token, contentId, corpusId, activeScript.id, currentFullText);
+              try {
+                  const res = await uploadAudio(token, contentId, mergedBlob, filename);
+
+                  if (res && res.code === "2000") {
+                      if (isTextChanged && syncTextEnabled) {
+                          const corpusId = target.corpusId;
+                          await updateScriptText(token, contentId, corpusId, activeScript.id, currentFullText);
+                      }
+                      successCount++;
+                  } else if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+                      locked = true;
+                      failCount++;
+                  } else {
+                      failCount++;
+                  }
+              } catch (e) {
+                  console.error(`Single upload failed for target ${contentId}`, e);
+                  if (e.message && e.message.includes('锁定')) locked = true;
+                  failCount++;
               }
+          }
 
-              // Mark as uploaded
+          if (successCount > 0 && failCount === 0) {
+               // Mark as uploaded
               setAudioGroups(prev => {
                   const updated = [...prev];
                   updated[groupIndex] = {
                     ...updated[groupIndex],
                     isUploaded: true,
                     hasUploadedHistory: true, // Mark history
-                    baizeData: matchedCorpus.baizeData
+                    baizeData: matchedCorpus.baizeData,
+                    baizeTargets: matchedCorpus.baizeTargets // Persist targets
                   };
                   return updated;
               });
@@ -505,22 +560,13 @@ function TtsEditor() {
               logAction(ActionTypes.UPLOAD_SINGLE, {
                   groupName: group.index,
                   scriptId: activeScript.id,
-                  contentId: contentId
+                  targets: targets.length
               }, 'success');
 
-              setMessage({ text: `上传成功: ${group.index}`, type: 'success' });
-          } else if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
-              logAction(ActionTypes.UPLOAD_SINGLE, {
-                  groupName: group.index,
-                  error: 'Resource locked'
-              }, 'error');
-              setMessage({ text: `上传失败: 语料被锁定`, type: 'error' });
+              setMessage({ text: `上传成功: ${group.index} (同步 ${targets.length} 个目标)`, type: 'success' });
           } else {
-              logAction(ActionTypes.UPLOAD_SINGLE, {
-                  groupName: group.index,
-                  error: res?.msg || 'Unknown error'
-              }, 'error');
-              setMessage({ text: `上传失败: ${res?.msg || '未知错误'}`, type: 'error' });
+              const msg = locked ? '部分或全部语料被锁定' : '上传存在失败';
+              setMessage({ text: `上传完成: 成功 ${successCount}/${targets.length}, 失败 ${failCount} (${msg})`, type: failCount > 0 ? 'warning' : 'success' });
           }
 
       } catch (error) {
@@ -704,43 +750,55 @@ function TtsEditor() {
             const originalText = matchedCorpus.text;
             const isTextChanged = currentFullText.replace(/\s/g, '') !== originalText.replace(/\s/g, '');
 
-            const contentId = matchedCorpus.baizeData.id;
-            try {
-                const filename = `${group.index}.wav`;
-                const res = await uploadAudio(token, contentId, mergedBlob, filename);
+            const targets = matchedCorpus.baizeTargets || [matchedCorpus.baizeData];
+            let groupSuccess = 0;
+            let groupFail = 0;
 
-                if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
-                    lockedErrorOccurred = true;
-                    failCount++;
-                } else if (res && res.code === "2000") {
-                    if (isTextChanged && syncTextEnabled) {
-                        const corpusId = matchedCorpus.baizeData.corpusId;
-                        await updateScriptText(token, contentId, corpusId, activeScript.id, currentFullText);
+            for (const target of targets) {
+                const contentId = target.id;
+                try {
+                    const filename = `${group.index}.wav`;
+                    const res = await uploadAudio(token, contentId, mergedBlob, filename);
+
+                    if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
+                        lockedErrorOccurred = true;
+                        groupFail++;
+                    } else if (res && res.code === "2000") {
+                        if (isTextChanged && syncTextEnabled) {
+                            const corpusId = target.corpusId;
+                            await updateScriptText(token, contentId, corpusId, activeScript.id, currentFullText);
+                        }
+                        groupSuccess++;
+                    } else {
+                        // throw new Error(res.msg || "上传失败"); // Don't throw inside loop
+                        groupFail++;
                     }
+                } catch (e) {
+                    console.error(`Failed to upload for contentId ${contentId}`, e);
+                    if (e.message && e.message.includes('锁定')) {
+                        lockedErrorOccurred = true;
+                    }
+                    groupFail++;
+                }
+            }
 
-                    setAudioGroups(prev => {
-                        return prev.map((item, idx) => {
-                            if (idx === i) {
-                                return {
-                                  ...item,
-                                  isUploaded: true,
-                                  hasUploadedHistory: true,
-                                  baizeData: matchedCorpus.baizeData
-                                };
-                            }
-                            return item;
-                        });
+            if (groupSuccess > 0 && groupFail === 0) {
+                 setAudioGroups(prev => {
+                    return prev.map((item, idx) => {
+                        if (idx === i) {
+                            return {
+                              ...item,
+                              isUploaded: true,
+                              hasUploadedHistory: true,
+                              baizeData: matchedCorpus.baizeData,
+                              baizeTargets: matchedCorpus.baizeTargets
+                            };
+                        }
+                        return item;
                     });
-
-                    successCount++;
-                } else {
-                    throw new Error(res.msg || "上传失败");
-                }
-            } catch (e) {
-                console.error(`Failed to upload for contentId ${contentId}`, e);
-                if (e.message && e.message.includes('锁定')) {
-                    lockedErrorOccurred = true;
-                }
+                });
+                successCount++; // Count group success
+            } else {
                 failCount++;
             }
         }
