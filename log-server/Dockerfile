@@ -5,6 +5,9 @@ WORKDIR /app
 # Copy package files first for caching
 COPY package*.json ./
 
+# Use npm mirror for faster installation in China
+RUN npm config set registry https://registry.npmmirror.com/
+
 # Install production dependencies
 RUN npm install --production
 
