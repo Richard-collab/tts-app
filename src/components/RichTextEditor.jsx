@@ -6,7 +6,7 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
   const editorRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [editingPill, setEditingPill] = useState(null);
-  const [durationInput, setDurationInput] = useState('1.0');
+  const [durationInput, setDurationInput] = useState('0.5');
 
   // Store the last known range selection for this editor
   const lastRangeRef = useRef(null);
