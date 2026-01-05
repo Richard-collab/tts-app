@@ -3,6 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = 3001;
@@ -12,12 +13,18 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Database Setup
-const dbPath = path.resolve(__dirname, 'logs.db');
+const dbPath = process.env.DB_PATH || path.resolve(__dirname, 'data', 'logs.db');
+const dbDir = path.dirname(dbPath);
+
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database:', err.message);
     } else {
-        console.log('Connected to the SQLite database.');
+        console.log(`Connected to the SQLite database at ${dbPath}.`);
         createTable();
     }
 });
