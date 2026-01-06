@@ -41,6 +41,33 @@ import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
 import '../App.css';
 
+// Helper for finding matching corpus
+const findMatchedCorpus = (group, corpusList) => {
+  // 1. Exact Name Match
+  let match = corpusList.find(c => c.index === group.index);
+  if (match) return match;
+
+  // 2. ID Match (if source has baize info)
+  if (group.baizeData?.id) {
+       match = corpusList.find(c => {
+           if (c.baizeData?.id === group.baizeData.id) return true;
+           if (c.baizeTargets?.some(t => t.id === group.baizeData.id)) return true;
+           return false;
+       });
+       if (match) return match;
+  }
+
+  // 3. Text Match (Normalized)
+  // Use original text from baizeData if available (to handle edited text case), otherwise current group text
+  const textToMatch = group.baizeData?.text || group.text;
+  if (textToMatch) {
+      const normalizedSource = textToMatch.replace(/\s/g, '');
+      match = corpusList.find(c => c.text && c.text.replace(/\s/g, '') === normalizedSource);
+  }
+
+  return match;
+};
+
 function TtsEditor() {
   // Form state
   const [voice, setVoice] = useState('');
@@ -465,9 +492,10 @@ function TtsEditor() {
       }
 
       // Find matching corpus in target script
-      const matchedCorpus = activeCorpusList.find(c => c.index === group.index);
+      const matchedCorpus = findMatchedCorpus(group, activeCorpusList);
+
       if (!matchedCorpus) {
-          setMessage({ text: `无法上传: 当前语料名称 "${group.index}" 不在目标话术 "${activeScript.scriptName}" 中`, type: 'error' });
+          setMessage({ text: `无法上传: 当前语料名称 "${group.index}" (或ID/内容) 不在目标话术 "${activeScript.scriptName}" 中`, type: 'error' });
           setUploadingGroupIndices(prev => {
               const newSet = new Set(prev);
               newSet.delete(groupIndex);
@@ -688,7 +716,8 @@ function TtsEditor() {
         const group = audioGroups[i];
         if (group.checked === false) continue;
 
-        const matchedCorpus = activeCorpusList.find(c => c.index === group.index);
+        const matchedCorpus = findMatchedCorpus(group, activeCorpusList);
+
         if (matchedCorpus) {
             groupsToUpload.push({ group, index: i, matchedCorpus });
         } else {
