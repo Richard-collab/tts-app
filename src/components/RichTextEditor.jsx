@@ -170,8 +170,8 @@ const RichTextEditor = forwardRef(({ value, onChange, onBlur, onFocus, voice, on
         sel.addRange(range);
       }
 
-      const duration = 1.0;
-      const pillHtml = `<span class="pause-pill" contenteditable="false" data-duration="${duration.toFixed(1)}">停顿 ${duration.toFixed(1)}s</span>`;
+      const duration = 0.5;
+      const pillHtml = `<span class="pause-pill" contenteditable="false" data-duration="${duration.toFixed(1.0)}">停顿 ${duration.toFixed(1)}s</span>`;
 
       document.execCommand('insertHTML', false, pillHtml);
       handleInput();
