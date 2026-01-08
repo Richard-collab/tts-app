@@ -214,7 +214,7 @@ export async function fetchRemoteAudio(audioUrl) {
     }
 
     const proxyUrl = `/api/proxy/get?url=${encodeURIComponent(audioUrl)}`;
-    // console.log(`Fetching remote audio via proxy: ${proxyUrl}`);
+    console.log(`Fetching remote audio via proxy: ${proxyUrl}`);
 
     const response = await fetch(proxyUrl, {
         method: 'GET',
