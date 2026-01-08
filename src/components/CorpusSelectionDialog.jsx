@@ -223,6 +223,12 @@ const CorpusSelectionInner = ({ onConfirm, corpusList, scriptName, onClose }) =>
                               color={getStatusColor(item.audioStatus)}
                               sx={{ height: 20, fontSize: '0.7rem' }}
                             />
+                            {item.statusStats && item.statusStats.total > 1 && (
+                              <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                                {item.statusStats.verified}个已验听, {item.statusStats.unverified}个未验听
+                                {item.statusStats.marked > 0 ? `, ${item.statusStats.marked}个已标记` : ''}
+                              </Typography>
+                            )}
                           </Box>
                         }
                         secondary={

@@ -272,12 +272,35 @@ function TtsEditor() {
                   const combinedName = entry.names.join('&');
                   const primary = entry.primaryItem;
 
+                  // Calculate aggregate status
+                  let countVerified = 0;
+                  let countMarked = 0;
+                  let countUnverified = 0;
+                  const totalItems = entry.items.length;
+
+                  entry.items.forEach(item => {
+                      const status = item.audioStatus || '0';
+                      if (status === '1') countVerified++;
+                      else if (status === '2') countMarked++;
+                      else countUnverified++;
+                  });
+
+                  let aggregatedStatus = '0';
+                  if (countVerified === totalItems) aggregatedStatus = '1';
+                  else if (countMarked === totalItems) aggregatedStatus = '2';
+
                   return {
                       index: combinedName,
                       text: entry.text,
                       corpusType: primary.corpusType || '',
                       canvasName: primary.canvasName || '',
-                      audioStatus: primary.audioStatus || '0',
+                      audioStatus: aggregatedStatus,
+                      statusStats: {
+                          verified: countVerified,
+                          marked: countMarked,
+                          unverified: countUnverified,
+                          total: totalItems
+                      },
                       audioPath: primary.audioPath || '',
                       baizeData: {
                           id: primary.id,
