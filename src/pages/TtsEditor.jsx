@@ -867,7 +867,7 @@ function TtsEditor() {
 
   // Generate single audio
   const generateSingleAudio = useCallback(async (text, voiceVal, speedVal, volumeVal, pitchVal) => {
-    const response = await fetchWithRetry('http://192.168.23.176:6789/synthesize', {
+    const response = await fetchWithRetry('/synthesize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
