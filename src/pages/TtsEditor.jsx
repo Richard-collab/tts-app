@@ -40,34 +40,8 @@ import TtsControls from '../components/TtsControls';
 import { contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
 import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
+import { findMatchedCorpus } from '../utils/corpusUtils';
 import '../App.css';
-
-// Helper for finding matching corpus
-const findMatchedCorpus = (group, corpusList) => {
-  // 1. Exact Name Match
-  let match = corpusList.find(c => c.index === group.index);
-  if (match) return match;
-
-  // 2. ID Match (if source has baize info)
-  if (group.baizeData?.id) {
-       match = corpusList.find(c => {
-           if (c.baizeData?.id === group.baizeData.id) return true;
-           if (c.baizeTargets?.some(t => t.id === group.baizeData.id)) return true;
-           return false;
-       });
-       if (match) return match;
-  }
-
-  // 3. Text Match (Normalized)
-  // Use original text from baizeData if available (to handle edited text case), otherwise current group text
-  const textToMatch = group.baizeData?.text || group.text;
-  if (textToMatch) {
-      const normalizedSource = textToMatch.replace(/\s/g, '');
-      match = corpusList.find(c => c.text && c.text.replace(/\s/g, '') === normalizedSource);
-  }
-
-  return match;
-};
 
 function TtsEditor() {
   // Form state
@@ -660,7 +634,7 @@ function TtsEditor() {
     // If confirmed, proceed immediately using current targetScript and list
     executeSingleUpload(groupIndex, targetScript, targetScriptCorpusList);
 
-  }, [token, targetScript, hasConfirmedSingleUploadScript, targetScriptCorpusList, executeSingleUpload]);
+  }, [token, targetScript, hasConfirmedSingleUploadScript, targetScriptCorpusList, executeSingleUpload, handleLoginOpen]);
 
   const handleBatchUploadClick = async () => {
     if (!token) {
