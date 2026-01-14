@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Box, Typography, Button, Tooltip, TextField, Chip
+  Box, Typography, Button, Tooltip, TextField, Chip, CircularProgress
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -188,8 +188,21 @@ function AudioItem({
           />
         </Box>
 
-        {/* Audio Player or Error */}
-        {hasError ? (
+        {/* Audio Player or Error or Loading */}
+        {segment.loading ? (
+            <Box sx={{
+              p: 1.5,
+              bgcolor: 'rgba(108, 92, 231, 0.05)',
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              color: 'primary.main'
+            }}>
+                <CircularProgress size={20} color="inherit" />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>正在生成音频...</Typography>
+            </Box>
+        ) : hasError ? (
           <Box sx={{
             p: 1.5,
             bgcolor: 'rgba(232, 67, 147, 0.05)',
