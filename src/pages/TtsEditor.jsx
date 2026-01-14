@@ -34,8 +34,10 @@ import { splitTextIntoSentences } from '../utils/textUtils';
 import { logAction, ActionTypes } from '../utils/logger';
 import { useWorkspacePersistence } from '../hooks/useWorkspacePersistence'
 import { useBaizeAuth } from '../hooks/useBaizeAuth';
+import { useUpdateNotification } from '../hooks/useUpdateNotification';
 import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
 import ScriptSelectionDialog from '../components/ScriptSelectionDialog';
+import UpdateNotificationDialog from '../components/UpdateNotificationDialog';
 import TtsControls from '../components/TtsControls';
 import { contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
 import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
@@ -133,6 +135,13 @@ function TtsEditor() {
     handleLoginSubmit,
     handleLogout
   } = useBaizeAuth(setMessage);
+
+  // Update Notification Hook
+  const {
+    isOpen: updateDialogOpen,
+    handleClose: handleUpdateDialogClose,
+    updateInfo
+  } = useUpdateNotification();
 
   // Handler for linking script without importing content (context only)
   const handleLinkScript = useCallback(() => {
@@ -2020,6 +2029,13 @@ function TtsEditor() {
                 <Button onClick={() => setHelpDialogOpen(false)} autoFocus>关闭</Button>
             </DialogActions>
           </Dialog>
+
+          {/* Update Notification Dialog */}
+          <UpdateNotificationDialog
+            open={updateDialogOpen}
+            onClose={handleUpdateDialogClose}
+            updateInfo={updateInfo}
+          />
       </Container>
   );
 }
