@@ -45,6 +45,24 @@ import { fetchWithRetry } from '../utils/networkUtils';
 import { findMatchedCorpus, processCorpusData } from '../utils/corpusUtils';
 import '../App.css';
 
+// Concurrency helper
+async function runWithConcurrency(tasks, limit) {
+  const results = [];
+  const executing = [];
+  for (const task of tasks) {
+    const p = task().then(result => {
+      executing.splice(executing.indexOf(p), 1);
+      return result;
+    });
+    results.push(p);
+    executing.push(p);
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+    }
+  }
+  return Promise.all(results);
+}
+
 function TtsEditor() {
   // Form state
   const [voice, setVoice] = useState('');
@@ -891,63 +909,144 @@ function TtsEditor() {
     mergedAudiosRef.current = {};
 
     const shouldSplit = splitOption === 'yes';
-    let totalSegments = 0;
-    data.forEach(item => {
-      const segments = shouldSplit ? splitTextIntoSentences(item.text) : [item.text];
-      totalSegments += segments.length;
-    });
-
-    let processedSegments = 0;
-    const newAudioGroups = [];
+    const isMinMax = voice.toLowerCase().includes('minmax');
 
     try {
-      for (let groupIndex = 0; groupIndex < data.length; groupIndex++) {
-        const item = data[groupIndex];
-        const segments = shouldSplit ? splitTextIntoSentences(item.text) : [item.text];
-        
-        const audioGroup = {
-          index: item.index,
-          text: item.text,
-          segments: [],
-          baizeData: item.baizeData, // Preserve Baize metadata if present
-          checked: true, // Default to checked
-          isUploaded: false // Track upload status
-        };
+      if (isMinMax) {
+        // Parallel Logic for MinMax (limit 50)
+        const initialGroups = [];
+        let totalSegments = 0;
 
-        for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
-          const segmentText = segments[segmentIndex];
-          setStatus(`正在生成第 ${processedSegments + 1} 个音频片段 (共 ${totalSegments} 个)...`);
-          const percent = Math.round((processedSegments / totalSegments) * 100);
-          setProgress(percent);
+        // 1. Prepare structure
+        data.forEach(item => {
+           const segments = shouldSplit ? splitTextIntoSentences(item.text) : [item.text];
+           totalSegments += segments.length;
 
-          try {
-            const blob = await generateSingleAudio(segmentText, voice, speed, volume, pitch);
-            const audioUrl = URL.createObjectURL(blob);
-            audioGroup.segments.push({
-              text: segmentText,
-              blob,
-              url: audioUrl,
-              played: false
+           initialGroups.push({
+             index: item.index,
+             text: item.text,
+             baizeData: item.baizeData, // Preserve Baize metadata if present
+             checked: true,
+             isUploaded: false,
+             segments: segments.map(segText => ({
+               text: segText,
+               loading: true, // Mark as loading
+               played: false
+             }))
+           });
+        });
+
+        setAudioGroups(initialGroups);
+        setStatus(`正在并行生成 ${totalSegments} 个音频片段...`);
+
+        // 2. Create Tasks
+        const tasks = [];
+        let completedCount = 0;
+
+        initialGroups.forEach((group, gIdx) => {
+            group.segments.forEach((segment, sIdx) => {
+                tasks.push(async () => {
+                    try {
+                        const blob = await generateSingleAudio(segment.text, voice, speed, volume, pitch);
+                        const url = URL.createObjectURL(blob);
+
+                        // Update state
+                        setAudioGroups(prev => {
+                            const updated = [...prev];
+                            if (updated[gIdx] && updated[gIdx].segments[sIdx]) {
+                                updated[gIdx].segments[sIdx] = {
+                                    ...updated[gIdx].segments[sIdx],
+                                    loading: false,
+                                    blob,
+                                    url
+                                };
+                            }
+                            return updated;
+                        });
+                    } catch (error) {
+                        setAudioGroups(prev => {
+                            const updated = [...prev];
+                             if (updated[gIdx] && updated[gIdx].segments[sIdx]) {
+                                updated[gIdx].segments[sIdx] = {
+                                    ...updated[gIdx].segments[sIdx],
+                                    loading: false,
+                                    error: error.message
+                                };
+                             }
+                            return updated;
+                        });
+                    } finally {
+                        completedCount++;
+                        const percent = Math.round((completedCount / totalSegments) * 100);
+                        setProgress(percent);
+                        setStatus(`已生成 ${completedCount}/${totalSegments} 个音频片段...`);
+                    }
+                });
             });
-          } catch (error) {
-            audioGroup.segments.push({
-              text: segmentText,
-              error: error.message
-            });
-          }
-          processedSegments++;
+        });
+
+        // 3. Execute with limit
+        await runWithConcurrency(tasks, 50);
+
+      } else {
+        // Existing Sequential Logic
+        let totalSegments = 0;
+        data.forEach(item => {
+          const segments = shouldSplit ? splitTextIntoSentences(item.text) : [item.text];
+          totalSegments += segments.length;
+        });
+
+        let processedSegments = 0;
+        const newAudioGroups = [];
+
+        for (let groupIndex = 0; groupIndex < data.length; groupIndex++) {
+            const item = data[groupIndex];
+            const segments = shouldSplit ? splitTextIntoSentences(item.text) : [item.text];
+
+            const audioGroup = {
+              index: item.index,
+              text: item.text,
+              segments: [],
+              baizeData: item.baizeData, // Preserve Baize metadata if present
+              checked: true, // Default to checked
+              isUploaded: false // Track upload status
+            };
+
+            for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+              const segmentText = segments[segmentIndex];
+              setStatus(`正在生成第 ${processedSegments + 1} 个音频片段 (共 ${totalSegments} 个)...`);
+              const percent = Math.round((processedSegments / totalSegments) * 100);
+              setProgress(percent);
+
+              try {
+                const blob = await generateSingleAudio(segmentText, voice, speed, volume, pitch);
+                const audioUrl = URL.createObjectURL(blob);
+                audioGroup.segments.push({
+                  text: segmentText,
+                  blob,
+                  url: audioUrl,
+                  played: false
+                });
+              } catch (error) {
+                audioGroup.segments.push({
+                  text: segmentText,
+                  error: error.message
+                });
+              }
+              processedSegments++;
+            }
+            newAudioGroups.push(audioGroup);
+            setAudioGroups([...newAudioGroups]);
         }
-        newAudioGroups.push(audioGroup);
-        setAudioGroups([...newAudioGroups]);
       }
 
       setProgress(100);
-      setStatus(`音频生成完成! 共生成 ${totalSegments} 个音频片段`);
+      setStatus('音频生成完成!');
 
       logAction(ActionTypes.SYNTHESIS_COMPLETE, {
-          totalSegments,
           groupCount: data.length,
-          voice
+          voice,
+          mode: isMinMax ? 'parallel' : 'sequential'
       }, 'success');
 
       setMessage({ text: '所有音频生成完成！', type: 'success' });
