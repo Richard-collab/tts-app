@@ -38,9 +38,10 @@ import { useUpdateNotification } from '../hooks/useUpdateNotification';
 import CorpusSelectionDialog from '../components/CorpusSelectionDialog';
 import ScriptSelectionDialog from '../components/ScriptSelectionDialog';
 import UpdateNotificationDialog from '../components/UpdateNotificationDialog';
+import ExcelPasteDialog from '../components/ExcelPasteDialog';
 import TtsControls from '../components/TtsControls';
 import { contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
-import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
+import { parseExcelFile } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
 import { findMatchedCorpus, processCorpusData } from '../utils/corpusUtils';
 import '../App.css';
@@ -74,7 +75,6 @@ function TtsEditor() {
   const [textInput, setTextInput] = useState('');
   const [fileName, setFileName] = useState('未选择文件');
   const [openPasteDialog, setOpenPasteDialog] = useState(false);
-  const [pasteContent, setPasteContent] = useState('');
   const fileInputRef = useRef(null);
   const excelDataRef = useRef(null);
   const baizeDataRef = useRef(null);
@@ -831,34 +831,19 @@ function TtsEditor() {
 
   const handleClosePasteDialog = () => {
     setOpenPasteDialog(false);
-    setPasteContent('');
   };
 
-  const handlePasteConfirm = () => {
-    try {
-      const validData = parseTSVContent(pasteContent);
+  const handlePasteImport = (validData) => {
+    excelDataRef.current = validData;
+    setFileName('已从剪贴板导入数据');
+    logAction(ActionTypes.IMPORT_PASTE, { count: validData.length }, 'success');
+    setMessage({ text: `成功导入 ${validData.length} 条数据`, type: 'success' });
+    setOpenPasteDialog(false);
+  };
 
-      excelDataRef.current = validData;
-      setFileName('已从剪贴板导入数据');
-
-      logAction(ActionTypes.IMPORT_PASTE, { count: validData.length }, 'success');
-
-      setMessage({ text: `成功导入 ${validData.length} 条数据`, type: 'success' });
-      handleClosePasteDialog();
-
-    } catch (error) {
-      // If error message is one of our custom ones, display it directly.
-      // Otherwise prefix with "解析失败".
-      // Since parseTSVContent throws specific friendly errors, we can just use error.message
-      // However, to match previous behavior for unknown errors, we can check.
-      // But simpler is to trust the utility.
-
-      logAction(ActionTypes.IMPORT_PASTE, { error: error.message }, 'error');
-
-      // We'll keep the UI consistent with the utility's error messages
-      // If the utility throws "粘贴内容为空", we show that.
-      setMessage({ text: error.message, type: 'error' });
-    }
+  const handlePasteError = (error) => {
+    logAction(ActionTypes.IMPORT_PASTE, { error: error.message }, 'error');
+    setMessage({ text: error.message, type: 'error' });
   };
 
   // Generate audio
@@ -1968,32 +1953,12 @@ function TtsEditor() {
           {/* </Grid> */}
           </Box>
 
-          <Dialog open={openPasteDialog} onClose={handleClosePasteDialog} maxWidth="md" fullWidth>
-            <DialogTitle>从剪贴板粘贴数据</DialogTitle>
-            <DialogContent>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                请从Excel中复制表格内容（包含表头"语料名称"和"文字内容"），并粘贴到下方文本框中。
-              </Typography>
-              <TextField
-                autoFocus
-                margin="dense"
-                id="paste-content"
-                label="粘贴区域"
-                type="text"
-                fullWidth
-                multiline
-                rows={10}
-                variant="outlined"
-                value={pasteContent}
-                onChange={(e) => setPasteContent(e.target.value)}
-                placeholder={`语料名称\t文字内容\n001\t你好世界\n002\t测试文本`}
-              />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleClosePasteDialog}>取消</Button>
-              <Button onClick={handlePasteConfirm} variant="contained">确认导入</Button>
-            </DialogActions>
-          </Dialog>
+          <ExcelPasteDialog
+            open={openPasteDialog}
+            onClose={handleClosePasteDialog}
+            onImport={handlePasteImport}
+            onError={handlePasteError}
+          />
 
           {/* Login Dialog */}
           <Dialog open={loginOpen} onClose={handleLoginClose}>
