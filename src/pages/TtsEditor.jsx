@@ -41,8 +41,8 @@ import UpdateNotificationDialog from '../components/UpdateNotificationDialog';
 import TtsControls from '../components/TtsControls';
 import { contentLeft, contentRight1, contentRight2, contentRight3 } from '../constants/ttsConfig';
 import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
-import { fetchWithRetry } from '../utils/networkUtils';
 import { findMatchedCorpus, processCorpusData } from '../utils/corpusUtils';
+import { generateSingleAudio } from '../utils/ttsApi';
 import '../App.css';
 
 // Concurrency helper
@@ -792,22 +792,6 @@ function TtsEditor() {
     }
   };
 
-  // Generate single audio
-  const generateSingleAudio = useCallback(async (text, voiceVal, speedVal, volumeVal, pitchVal) => {
-    const response = await fetchWithRetry('http://192.168.23.176:6789/synthesize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        spk_name: voiceVal,
-        speed: speedVal,
-        volume: volumeVal,
-        pitch: pitchVal
-      })
-    }, 3, 1000);
-    return await response.blob();
-  }, []);
-
   // Handle file change
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -1253,7 +1237,7 @@ function TtsEditor() {
       setMessage({ text: `重新生成音频失败: ${error.message}`, type: 'error' });
       throw error;
     }
-  }, [voice, speed, volume, pitch, generateSingleAudio, handleUpdateSegment]);
+  }, [voice, speed, volume, pitch, handleUpdateSegment]);
 
   // Generate test audio for testing
   const handleAddTestData = useCallback(() => {
