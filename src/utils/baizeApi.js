@@ -82,8 +82,12 @@ export async function fetchScriptCorpus(token, scriptId) {
 
 // Upload Audio
 export async function uploadAudio(token, contentId, wavBlob, filename) {
-
-    console.log(filename);
+    // Ensure filename is provided
+    if (!filename) {
+        console.warn('uploadAudio: filename missing, defaulting to audio.wav');
+        filename = 'audio.wav';
+    }
+    console.log('Uploading audio:', filename);
 
     const targetUrl = `${BASE_URL}/AiSpeech/scriptCorpus/importSingle?contentId=${contentId}`;
     const proxyUrl = `/api/proxy/post?url=${encodeURIComponent(targetUrl)}`;

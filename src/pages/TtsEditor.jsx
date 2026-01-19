@@ -471,8 +471,14 @@ function TtsEditor() {
           for (const target of targets) {
               const contentId = target.id;
               // Use specific corpus name if available, otherwise fallback to group index (which might be aggregated)
-              const specificName = target.originalData?.contentName || group.index;
-              const filename = `${specificName}.wav`;
+              let specificName = target.originalData?.contentName;
+              if (!specificName) {
+                  console.warn('ContentName missing for target', target.id, 'falling back to group index');
+                  specificName = group.index;
+              }
+
+              const filename = specificName.toLowerCase().endsWith('.wav') ? specificName : `${specificName}.wav`;
+              console.log(`Uploading target ${target.id} with filename: ${filename}`);
 
               try {
                   const res = await uploadAudio(token, contentId, mergedBlob, filename);
@@ -712,8 +718,13 @@ function TtsEditor() {
                 const contentId = target.id;
                 try {
                     // Use specific corpus name if available, otherwise fallback to group index
-                    const specificName = target.originalData?.contentName || group.index;
-                    const filename = `${specificName}.wav`;
+                    let specificName = target.originalData?.contentName;
+                    if (!specificName) {
+                         console.warn('ContentName missing for target', target.id, 'falling back to group index');
+                         specificName = group.index;
+                    }
+
+                    const filename = specificName.toLowerCase().endsWith('.wav') ? specificName : `${specificName}.wav`;
                     const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
                     if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
