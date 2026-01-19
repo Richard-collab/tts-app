@@ -470,7 +470,9 @@ function TtsEditor() {
 
           for (const target of targets) {
               const contentId = target.id;
-              const filename = `${group.index}.wav`;
+              // Use specific corpus name if available, otherwise fallback to group index (which might be aggregated)
+              const specificName = target.originalData?.contentName || group.index;
+              const filename = `${specificName}.wav`;
 
               try {
                   const res = await uploadAudio(token, contentId, mergedBlob, filename);
@@ -709,7 +711,9 @@ function TtsEditor() {
             for (const target of targets) {
                 const contentId = target.id;
                 try {
-                    const filename = `${group.index}.wav`;
+                    // Use specific corpus name if available, otherwise fallback to group index
+                    const specificName = target.originalData?.contentName || group.index;
+                    const filename = `${specificName}.wav`;
                     const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
                     if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
@@ -794,7 +798,7 @@ function TtsEditor() {
 
   // Generate single audio
   const generateSingleAudio = useCallback(async (text, voiceVal, speedVal, volumeVal, pitchVal) => {
-    const response = await fetchWithRetry('http://192.168.23.176:6789/synthesize', {
+    const response = await fetchWithRetry('/synthesize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

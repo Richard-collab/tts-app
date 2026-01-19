@@ -85,17 +85,13 @@ export async function uploadAudio(token, contentId, wavBlob, filename) {
 
     console.log(filename);
 
-    const filenameNew = (filename.includes('&'))?'合并音频.wav':filename;
-
-    console.log(filenameNew);
-
     const targetUrl = `${BASE_URL}/AiSpeech/scriptCorpus/importSingle?contentId=${contentId}`;
     const proxyUrl = `/api/proxy/post?url=${encodeURIComponent(targetUrl)}`;
 
     console.log(`Uploading audio to: ${proxyUrl} for contentId: ${contentId}`);
 
     const formData = new FormData();
-    formData.append('file', wavBlob, filenameNew);
+    formData.append('file', wavBlob, filename);
 
     const response = await fetch(proxyUrl, {
         method: 'POST',
