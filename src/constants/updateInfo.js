@@ -1,9 +1,8 @@
 export const updateInfo = {
-  version: '1.0.1',
-  date: '2023-10-27', // Adjust date as needed
+  version: '1.0.2',
+  date: '2026-01-16', // Adjust date as needed
   title: '系统更新说明',
   content: [
-    '新增了更新提示功能：现在每次重要更新都会通过弹窗提示',
-    '您可以选择“本次更新不再提示”来关闭当前版本的提醒'
+    '新增NY音色-MinMax音色，男声'
   ]
 };
