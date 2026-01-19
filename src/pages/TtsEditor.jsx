@@ -471,8 +471,23 @@ function TtsEditor() {
           for (const target of targets) {
               const contentId = target.id;
               // Use specific corpus name if available, otherwise fallback to group index (which might be aggregated)
-              const specificName = target.originalData?.contentName || group.index;
-              const filename = `${specificName}.wav`;
+              // Handle potential property variations or missing data
+              const originalData = target.originalData || {};
+              let specificName = originalData.contentName || originalData.content_name || originalData.name;
+
+              if (!specificName) {
+                  console.warn('ContentName missing for target', target.id, target, 'falling back to group index');
+                  // If group index contains '&' it might be an aggregated name like "A&B", which is bad for a single file upload
+                  // But we don't have a better name.
+                  specificName = group.index;
+              }
+
+              // Sanitize filename: replace invalid chars for safety, though we keep it simple
+              // Ensure it ends with .wav
+              const baseName = specificName.replace(/[<>:"/\\|?*]/g, '_');
+              const filename = baseName.toLowerCase().endsWith('.wav') ? baseName : `${baseName}.wav`;
+
+              console.log(`Uploading target ${target.id} with filename: ${filename}`);
 
               try {
                   const res = await uploadAudio(token, contentId, mergedBlob, filename);
@@ -712,8 +727,16 @@ function TtsEditor() {
                 const contentId = target.id;
                 try {
                     // Use specific corpus name if available, otherwise fallback to group index
-                    const specificName = target.originalData?.contentName || group.index;
-                    const filename = `${specificName}.wav`;
+                    const originalData = target.originalData || {};
+                    let specificName = originalData.contentName || originalData.content_name || originalData.name;
+
+                    if (!specificName) {
+                         console.warn('ContentName missing for target', target.id, target, 'falling back to group index');
+                         specificName = group.index;
+                    }
+
+                    const baseName = specificName.replace(/[<>:"/\\|?*]/g, '_');
+                    const filename = baseName.toLowerCase().endsWith('.wav') ? baseName : `${baseName}.wav`;
                     const res = await uploadAudio(token, contentId, mergedBlob, filename);
 
                     if (res && (res.code === "666" || (res.msg && res.msg.includes('锁定')))) {
