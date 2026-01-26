@@ -43,25 +43,8 @@ import { contentLeft, contentRight1, contentRight2, contentRight3 } from '../con
 import { parseExcelFile, parseTSVContent } from '../utils/fileParser';
 import { fetchWithRetry } from '../utils/networkUtils';
 import { findMatchedCorpus, processCorpusData } from '../utils/corpusUtils';
+import { runWithConcurrency } from '../utils/asyncUtils';
 import '../App.css';
-
-// Concurrency helper
-async function runWithConcurrency(tasks, limit) {
-  const results = [];
-  const executing = [];
-  for (const task of tasks) {
-    const p = task().then(result => {
-      executing.splice(executing.indexOf(p), 1);
-      return result;
-    });
-    results.push(p);
-    executing.push(p);
-    if (executing.length >= limit) {
-      await Promise.race(executing);
-    }
-  }
-  return Promise.all(results);
-}
 
 function TtsEditor() {
   // Form state
